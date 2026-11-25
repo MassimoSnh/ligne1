@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="fr" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Le Casino · Arcade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: casino de quartier, chic mais pour rire
+   IDEA: une table de jeu en feutre vert sous une lampe
+   PICTURE: la roulette, la table de blackjack, la machine à sous, chacune grande
+   COLOUR and TYPE: feutre vert, bois, or, rouge et noir ; Playfair Display + Inter
+   LAYOUT: porte-monnaie en haut, onglets des trois jeux, le jeu en grand */
+:root{color-scheme:dark;--felt:#0d5c3f;--felt2:#0a4a33;--wood:#3b2312;--gold:#e8c16a;--ink:#f8f5ea;--mute:#c9c1a5;--red:#c81e2b;--black:#151515;--line:#2c7a5a}
+[hidden]{display:none!important}
+*{box-sizing:border-box;min-width:0}
+html{background:#06291c}
+body{margin:0;background:radial-gradient(900px 500px at 50% 0,#14724f 0,var(--felt2) 55%,#06291c 100%) fixed;color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;overflow-x:clip}
+h1,h2{font-family:"Playfair Display",serif;font-weight:900;line-height:1.05;margin:0}
+h1{font-size:clamp(36px,6vw,60px);color:var(--gold)}h2{font-size:26px}
+button{font:inherit;color:inherit;cursor:pointer;border:0;border-radius:10px}
+button:focus-visible,a:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+button:disabled{opacity:.45;cursor:not-allowed}
+.band{padding:clamp(16px,3vw,34px) max(4vw,14px);max-width:1100px;margin:0 auto}
+.top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.navbtn,.pillbtn{display:inline-flex;align-items:center;min-height:44px;padding:8px 14px;border-radius:10px;border:2px solid #ffffff30;background:#00000030;text-decoration:none;font-weight:600;color:var(--ink)}
+.pillbtn{background:var(--gold);border-color:var(--gold);color:#111}.pillbtn.me{background:var(--ink);border-color:var(--ink);color:#111;font-weight:500}
+.hero{display:flex;flex-wrap:wrap;gap:14px 30px;align-items:end;justify-content:space-between;margin-top:18px}
+.wallet{background:#0006;border:2px solid var(--gold);border-radius:16px;padding:12px 18px;min-width:220px}
+.wallet b{font:900 40px "Playfair Display",serif;color:var(--gold);font-variant-numeric:tabular-nums}.wallet span{display:block;font-size:13px;color:var(--mute)}
+.lead{color:var(--mute);margin:8px 0 0;max-width:58ch}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 14px}
+.tab{min-height:46px;padding:8px 18px;background:#0004;border:2px solid #ffffff25;font-weight:700}
+.tab[aria-pressed=true]{background:var(--gold);color:#111;border-color:var(--gold)}
+.table{background:var(--felt);border:10px solid var(--wood);border-radius:28px;box-shadow:inset 0 0 60px #0008,0 20px 40px #0007;padding:clamp(14px,3vw,28px)}
+.chips{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0}
+.chip{width:52px;height:52px;border-radius:50%;font-weight:800;font-size:15px;border:5px dashed #fff8;box-shadow:0 3px 0 #0007}
+.chip[aria-pressed=true]{outline:3px solid var(--gold);outline-offset:3px}
+.c1{background:#e5e7eb;color:#111}.c5{background:#dc2626}.c10{background:#2563eb}.c25{background:#16a34a}.c50{background:#111}
+.btn{min-height:48px;padding:10px 22px;font-weight:800;background:var(--gold);color:#111;font-size:17px}
+.ghost{min-height:44px;padding:8px 14px;background:#0003;border:2px solid #ffffff30;font-weight:600}
+.msg{min-height:30px;font-weight:700;font-size:18px;margin:10px 0}
+.win{color:#86efac}.lose{color:#fca5a5}
+/* roulette */
+.rl{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:center}
+@media(min-width:880px){.rl{grid-template-columns:300px minmax(0,1fr)}}
+.wheelbox{position:relative;width:min(300px,80vw);aspect-ratio:1;margin:0 auto}
+.wheelbox canvas{width:100%;height:100%}
+.ptr{position:absolute;left:50%;top:-6px;transform:translateX(-50%);width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;border-top:22px solid var(--gold)}
+.board{display:grid;grid-template-columns:34px repeat(12,minmax(0,1fr));gap:3px;font-weight:700;font-size:14px}
+@media(max-width:600px){.board{grid-template-columns:24px repeat(12,minmax(0,1fr));gap:2px;font-size:11px}.cell{min-height:34px;padding:0}.cell.out6{font-size:10px}}
+.cell{min-height:40px;display:grid;place-items:center;border:1px solid #ffffff40;border-radius:4px;position:relative;background:transparent}
+.cell.r{background:var(--red)}.cell.b{background:var(--black)}.cell.z{background:#15803d;grid-row:span 3}
+.cell.out{grid-column:span 4;background:#0003}.cell.out6{grid-column:span 2;background:#0003}
+.cell .bet{position:absolute;right:-4px;top:-6px;background:var(--gold);color:#111;border-radius:999px;font-size:11px;padding:0 5px;font-weight:800}
+.cell.hit{outline:3px solid var(--gold)}
+/* blackjack */
+.hand{display:flex;gap:8px;flex-wrap:wrap;min-height:112px;margin:8px 0}
+.card{width:72px;height:104px;border-radius:9px;background:#fff;color:#111;font-weight:800;padding:6px 8px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 4px 10px #0006;font-size:20px;animation:deal .25s ease-out}
+.card.red{color:var(--red)}.card .s{font-size:30px;align-self:center}.card.back{background:repeating-linear-gradient(45deg,#7f1d1d 0 8px,#991b1b 8px 16px);border:4px solid #fff}
+@keyframes deal{from{transform:translateY(-20px);opacity:0}}
+.hv{font-size:14px;color:var(--mute)}
+/* machine à sous */
+.slot{max-width:520px;margin:0 auto;background:linear-gradient(#7f1d1d,#450a0a);border:6px solid var(--gold);border-radius:24px;padding:20px}
+.reels{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;background:#111;padding:12px;border-radius:12px}
+.reel{height:120px;background:#fffdf5;border-radius:8px;display:grid;place-items:center;overflow:hidden}
+.reel svg{width:84px;height:84px}
+.reel.spin svg{animation:blur .1s linear infinite}
+@keyframes blur{0%{transform:translateY(-30px);opacity:.4}100%{transform:translateY(30px);opacity:.4}}
+.pay{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;margin-top:14px;font-size:14px;color:var(--mute)}
+.pay span{display:flex;align-items:center;gap:6px}.pay svg{width:22px;height:22px}
+.small{font-size:13px;color:var(--mute)}
+/* saloon */
+.saloontab{border-color:var(--gold)}
+.saloon{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+@media(min-width:980px){.saloon{grid-template-columns:minmax(0,1fr) 320px}}
+.subtabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.phase{display:flex;align-items:center;gap:12px;margin-bottom:12px;font-size:17px}.phase .bar{flex:1;height:10px;background:#0005;border-radius:6px;overflow:hidden}.phase .bar i{display:block;height:100%;background:var(--gold);width:0}
+.side{background:#0005;border:2px solid #ffffff20;border-radius:20px;padding:16px;display:flex;flex-direction:column}
+.plist{display:flex;flex-direction:column;gap:4px}.plist div{display:flex;gap:8px;align-items:center;padding:6px 8px;background:#ffffff0d;border-radius:8px}.plist b{flex:1}
+.chat{height:300px;overflow:auto;background:#0006;border-radius:10px;padding:8px 10px;font-size:15px;display:flex;flex-direction:column;gap:4px}
+.chat .sys{color:var(--gold);font-style:italic}.chat b{color:#93c5fd}
+.cform{display:flex;gap:6px;margin-top:8px}.cform input{flex:1;min-height:46px;border-radius:10px;border:2px solid #ffffff30;background:#0006;color:#fff;padding:0 10px;font-size:16px}.cform .btn{min-height:46px;padding:8px 14px;font-size:15px}
+.seats{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:10px}
+.seat{background:#0003;border:2px solid #ffffff20;border-radius:14px;padding:10px}.seat.me{border-color:var(--gold)}
+.seat .hand{min-height:80px}.seat .card{width:50px;height:72px;font-size:15px;padding:4px 5px}.seat .card .s{font-size:20px}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#000;color:#fff;padding:12px 18px;border-radius:10px;z-index:80;max-width:90vw}
+@media(prefers-reduced-motion:reduce){.card{animation:none}.reel.spin svg{animation:none}}
+</style>
+</head>
+<body>
+<div class="band">
+  <div class="top"><a class="navbtn" href="../">← Arcade</a><span id="pill"></span></div>
+  <div class="hero">
+    <div><h1>Le Casino</h1><p class="lead">100 coins offerts chaque lundi. Quand ton porte-monnaie est vide, rendez-vous la semaine prochaine. Le plus riche du dimanche soir gagne la semaine.</p></div>
+    <div class="wallet"><span>Porte-monnaie · semaine <i id="week"></i></span><b id="coins">100</b><span id="rec"></span></div>
+  </div>
+  <div class="tabs" role="tablist"><button class="tab" data-g="roulette" aria-pressed="true">Roulette</button><button class="tab" data-g="bj" aria-pressed="false">Blackjack</button><button class="tab" data-g="slot" aria-pressed="false">Machine à sous</button><button class="tab saloontab" data-g="saloon" aria-pressed="false">Le Saloon · à plusieurs</button></div>
+
+  <section class="table" id="g-roulette">
+    <div class="rl">
+      <div class="wheelbox"><div class="ptr"></div><canvas id="wheel" width="600" height="600" aria-label="Roue de la roulette"></canvas></div>
+      <div>
+        <div class="board" id="board"></div>
+        <div class="chips" id="chipsR"></div>
+        <div class="row" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn" id="spin">Lancer la bille</button><button class="ghost" id="clear">Retirer les mises</button><span id="totalR" class="small"></span></div>
+        <div class="msg" id="msgR" aria-live="polite"></div>
+        <p class="small">Numéro plein : 35 fois la mise. Rouge/noir, pair/impair, 1-18/19-36 : 1 fois. Douzaines : 2 fois. Le 0 fait perdre les mises simples.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="table" id="g-bj" hidden>
+    <h2>Croupier <span class="hv" id="dv"></span></h2><div class="hand" id="dh"></div>
+    <h2>Toi <span class="hv" id="pv"></span></h2><div class="hand" id="ph"></div>
+    <div class="msg" id="msgB" aria-live="polite"></div>
+    <div class="chips" id="chipsB"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" id="deal">Distribuer</button><button class="ghost" id="hit" disabled>Carte</button><button class="ghost" id="stand" disabled>Rester</button><button class="ghost" id="dbl" disabled>Doubler</button></div>
+    <p class="small">Le croupier tire jusqu'à 17. Blackjack payé 3 pour 2. Doubler : une seule carte de plus, mise doublée.</p>
+  </section>
+
+  <section id="g-slot" hidden>
+    <div class="slot">
+      <div class="reels"><div class="reel" id="r0"></div><div class="reel" id="r1"></div><div class="reel" id="r2"></div></div>
+      <div class="msg" id="msgS" aria-live="polite" style="text-align:center"></div>
+      <div class="chips" id="chipsS" style="justify-content:center"></div>
+      <div style="text-align:center"><button class="btn" id="pull">Tirer le levier</button></div>
+      <div class="pay" id="pay"></div>
+    </div>
+  </section>
+  <section id="g-saloon" hidden>
+    <div class="saloon">
+      <div class="table">
+        <div class="subtabs"><button class="tab" data-s="r" aria-pressed="true">Roulette du saloon</button><button class="tab" data-s="b" aria-pressed="false">Blackjack du saloon</button></div>
+        <div id="s-r">
+          <div class="phase"><b id="sphase">Connexion…</b><span class="bar"><i id="sbar"></i></span></div>
+          <div class="rl"><div class="wheelbox"><div class="ptr"></div><canvas id="swheel" width="600" height="600" aria-label="Roue du saloon"></canvas></div>
+          <div><div class="board" id="sboard"></div><div class="chips" id="schips"></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="ghost" id="sclear">Retirer mes mises</button><span id="stotal" class="small"></span></div>
+          <div class="msg" id="smsg" aria-live="polite"></div><div id="sbets" class="small"></div></div></div>
+        </div>
+        <div id="s-b" hidden>
+          <div class="phase"><b id="bphase">Connexion…</b><span class="bar"><i id="bbar"></i></span></div>
+          <h2>Croupier <span class="hv" id="sdv"></span></h2><div class="hand" id="sdh"></div>
+          <div id="seats" class="seats"></div>
+          <div class="msg" id="bmsg" aria-live="polite"></div>
+          <div class="chips" id="bchips"></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" id="bsit">Je joue cette main</button><button class="ghost" id="bhit" disabled>Carte</button><button class="ghost" id="bstand" disabled>Rester</button><button class="ghost" id="bdbl" disabled>Doubler</button></div>
+        </div>
+      </div>
+      <aside class="side">
+        <h2>Au saloon</h2><div id="spl" class="plist"><p class="small">…</p></div>
+        <h2 style="margin-top:14px">Le chat</h2><div id="chat" class="chat" aria-live="polite"></div>
+        <form id="cf" class="cform"><input id="ci" maxlength="140" autocomplete="off" placeholder="Écris un message…" aria-label="Message"><button class="btn">Envoyer</button></form>
+      </aside>
+    </div>
+  </section>
+  <p class="small" style="margin-top:18px">Jeu pour rire : les coins n'ont aucune valeur et ne s'achètent pas.</p>
+</div>
+<div id="toast" role="status" hidden></div>
+<script src="../firebase-config.js"></script>
+<script src="../shared/games.js"></script>
+<script src="casino.js"></script>
+<script src="saloon.js"></script>
+<script type="module" src="../shared/online.js"></script>
+</body>
+</html>

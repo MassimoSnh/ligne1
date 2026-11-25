@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="fr" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Volt · Saut et dash</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: arcade nerveuse, courte
+   IDEA: une borne d'arcade néon, un petit robot électrique
+   PICTURE: le niveau lui-même, plein écran
+   COLOUR and TYPE: nuit violette, jaune électrique, cyan ; Inter Tight + Inter
+   LAYOUT: grille de 12 niveaux ; en jeu, la scène au maximum, commandes tactiles en surimpression */
+:root{color-scheme:dark;--bg:#100d1f;--panel:#1d1838;--ink:#f1f0ff;--mute:#a7a3c9;--line:#3a3366;--y:#facc15;--c:#38bdf8}
+[hidden]{display:none!important}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#3b2a7a 0,var(--bg) 60%) fixed;color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;overflow-x:clip}
+h1,h2{font-family:"Inter Tight",sans-serif;font-weight:800;line-height:1.05;margin:0}
+h1{font-size:clamp(40px,7vw,72px);letter-spacing:-0.02em}h1 span{color:var(--y)}
+button,a{font:inherit;color:inherit}
+button{cursor:pointer;border:0;border-radius:10px}
+button:focus-visible,a:focus-visible{outline:3px solid var(--y);outline-offset:2px}
+.band{padding:clamp(16px,3vw,34px) max(4vw,14px)}
+.top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.navbtn,.pillbtn{display:inline-flex;align-items:center;min-height:44px;padding:8px 14px;border-radius:10px;border:2px solid var(--line);background:var(--panel);text-decoration:none;font-weight:600}
+.pillbtn{background:var(--y);border-color:var(--y);color:#111}.pillbtn.me{background:var(--ink);border-color:var(--ink);color:var(--bg);font-weight:500}
+.lead{color:var(--mute);max-width:60ch;margin:10px 0 0}
+.total{font:800 26px "Inter Tight",sans-serif}.total span{color:var(--y)}
+.keys{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:14px;color:var(--mute);font-size:14px}
+kbd{font:600 13px Inter;background:var(--panel);border:1px solid var(--line);border-bottom-width:3px;border-radius:6px;padding:1px 7px;color:var(--ink)}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:22px}
+.lv{display:flex;flex-direction:column;gap:4px;align-items:flex-start;text-align:left;padding:14px;background:var(--panel);border:2px solid var(--line);min-height:44px}
+.lv .num{font:800 28px "Inter Tight",sans-serif;color:var(--c)}.lv.done .num{color:var(--y)}
+.lv .nm{font-weight:600}.lv .st{color:var(--y);letter-spacing:2px}.lv .bt{font-size:13px;color:var(--mute)}
+.lv.locked{opacity:.45}.lv:not(.locked):hover{border-color:var(--y)}
+.unlock{margin-top:16px;background:none;color:var(--mute);text-decoration:underline;min-height:44px}
+/* jeu */
+#vgame{position:fixed;inset:0;background:#0a0816;display:flex;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.hud{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:8px 12px;font-weight:600}
+.hud .sp{flex:1}.hud #hstars{color:var(--y);letter-spacing:3px;font-size:20px}
+.hud button{min-height:40px;padding:6px 12px;background:var(--panel);border:2px solid var(--line)}
+.stagewrap{flex:1;display:grid;place-items:center;position:relative;min-height:0}
+#cv{width:min(100%,calc((100dvh - 110px)*960/528));aspect-ratio:960/528;display:block;border-radius:8px;box-shadow:0 0 0 2px #2b2552,0 20px 60px #0008;touch-action:none}
+.tip{color:var(--mute);font-size:14px;padding:6px 12px 10px;text-align:center}
+#end{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#16122ccc;backdrop-filter:blur(6px);border:2px solid var(--y);border-radius:16px;padding:22px 26px;text-align:center;width:min(440px,92%)}
+#end p{margin:8px 0}.bigstars{font-size:46px;color:var(--y);letter-spacing:8px}
+.row{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:12px}
+.cta{min-height:44px;padding:8px 16px;background:var(--y);color:#111;font-weight:700}
+.ghost{min-height:44px;padding:8px 14px;background:transparent;border:2px solid var(--line);font-weight:600}
+.small{font-size:13px;color:var(--mute)}
+.touch{display:none}
+@media (pointer:coarse){
+  .touch{display:block;position:absolute;inset:0;pointer-events:none}
+  #pad{position:absolute;left:18px;bottom:18px;width:130px;height:130px;border-radius:50%;background:#ffffff14;border:2px solid #ffffff30;pointer-events:auto;touch-action:none}
+  #knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px;border-radius:50%;background:#ffffff40}
+  .tb{position:absolute;bottom:22px;width:84px;height:84px;border-radius:50%;pointer-events:auto;touch-action:none;font-weight:800;font-size:14px;border:3px solid #ffffff40;user-select:none;-webkit-user-select:none}
+  #bjump{right:22px;background:#facc15cc;color:#111}#bdash{right:120px;bottom:60px;background:#38bdf8cc;color:#111}
+  .tb.on{transform:scale(.92);filter:brightness(1.3)}
+  .tip{display:none}
+}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#111417;color:#fff;padding:12px 18px;border-radius:10px;z-index:80;max-width:90vw}
+@media(prefers-reduced-motion:reduce){.tb.on{transform:none}}
+</style>
+</head>
+<body>
+<div id="vmap">
+  <div class="band">
+    <div class="top"><a class="navbtn" href="../">← Arcade</a><span id="pill"></span></div>
+    <div style="margin-top:22px;display:flex;flex-wrap:wrap;gap:12px 30px;align-items:end;justify-content:space-between">
+      <div><h1>VOLT<span>.</span></h1><p class="lead">Un petit robot électrique, 12 niveaux de saut de précision. Attrape les 3 étoiles de chaque niveau dans la même vie et file vers la sortie.</p></div>
+      <div class="total" id="vtotal"></div>
+    </div>
+    <div class="keys"><span><kbd>←</kbd> <kbd>→</kbd> courir</span><span><kbd>Espace</kbd> sauter (contre un mur : rebond)</span><span><kbd>X</kbd> ou <kbd>Shift</kbd> + flèches : dash</span><span><kbd>R</kbd> recommencer</span><span><kbd>Échap</kbd> pause</span></div>
+    <div id="grid"></div>
+    <button class="unlock" id="unlock">Débloquer tous les niveaux</button>
+  </div>
+</div>
+<div id="vgame" hidden>
+  <div class="hud"><button id="back">← Niveaux</button><span id="lname"></span><span class="sp"></span><span id="hstars"></span><span id="htime"></span><span id="hdeaths"></span><button id="restart">Recommencer</button></div>
+  <div class="stagewrap">
+    <canvas id="cv" aria-label="Niveau de Volt"></canvas>
+    <div class="touch"><div id="pad"><div id="knob"></div></div><button class="tb" id="bdash">DASH</button><button class="tb" id="bjump">SAUT</button></div>
+    <div id="end" hidden></div>
+  </div>
+  <div class="tip" id="tip"></div>
+</div>
+<div id="toast" role="status" hidden></div>
+<script src="../firebase-config.js"></script>
+<script src="../shared/games.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/game.js"></script>
+<script type="module" src="../shared/online.js"></script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>La Tour · Arcade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@800&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: un seul bouton, une seule envie : encore une
+   IDEA: une tour de blocs qui monte dans un ciel de couchant
+   PICTURE: la tour elle-même, plein écran
+   COLOUR and TYPE: violet vers rose, blocs en dégradé ; Inter Tight
+   LAYOUT: plein écran, score en haut, tout l'écran est le bouton */
+:root{color-scheme:dark}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#1e1036;color:#fff;font-family:Inter,system-ui,sans-serif;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+.top{position:fixed;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:max(12px,env(safe-area-inset-top)) 14px 0;z-index:2}
+.navbtn,.pillbtn{display:inline-flex;align-items:center;min-height:44px;padding:8px 14px;border-radius:10px;border:2px solid #ffffff40;background:#0004;text-decoration:none;font-weight:600;color:#fff}
+.pillbtn{background:#fde68a;color:#111;border-color:#fde68a}.pillbtn.me{background:#fff;color:#111;border-color:#fff;font-weight:400}
+.score{position:fixed;left:0;right:0;top:70px;text-align:center;font:800 clamp(56px,12vw,96px) "Inter Tight",sans-serif;text-shadow:0 4px 20px #0006;pointer-events:none;z-index:1}
+.combo{position:fixed;left:0;right:0;top:170px;text-align:center;font-weight:600;color:#fde68a;pointer-events:none;z-index:1}
+.panel{position:fixed;left:50%;top:55%;transform:translate(-50%,-50%);text-align:center;background:#0008;backdrop-filter:blur(6px);padding:22px 28px;border-radius:18px;z-index:3;width:min(420px,90%);border:2px solid #ffffff30}
+.panel h1{font:800 44px "Inter Tight",sans-serif;margin:0 0 6px}.panel p{margin:6px 0;color:#e9d5ff}
+.btn{min-height:50px;padding:10px 26px;border:0;border-radius:12px;background:#fde68a;color:#111;font:800 18px Inter;cursor:pointer;margin-top:10px}
+.btn:focus-visible,.navbtn:focus-visible{outline:3px solid #fff;outline-offset:2px}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#000;color:#fff;padding:12px 18px;border-radius:10px;z-index:80;max-width:90vw}
+</style>
+</head>
+<body>
+<canvas id="cv" aria-label="La tour de blocs"></canvas>
+<div class="top"><a class="navbtn" href="../">← Arcade</a><span id="pill"></span></div>
+<div class="score" id="score">0</div>
+<div class="combo" id="combo"></div>
+<div class="panel" id="panel">
+  <h1>La Tour</h1>
+  <p>Touche l'écran (ou Espace) pour poser le bloc. Ce qui dépasse tombe. Pose-le pile dessus pour garder sa taille : 3 placements parfaits d'affilée le font grandir.</p>
+  <p id="best"></p>
+  <button class="btn" id="go">Jouer</button>
+</div>
+<div id="toast" role="status" hidden></div>
+<script src="../firebase-config.js"></script>
+<script src="../shared/games.js"></script>
+<script>
+{
+const $ = s => document.querySelector(s), cv = $("#cv"), g = cv.getContext("2d");
+let W = 0, H = 0;
+function fit() { const d = devicePixelRatio || 1; W = innerWidth; H = innerHeight; cv.width = W * d; cv.height = H * d; g.setTransform(d, 0, 0, d, 0, 0); }
+addEventListener("resize", fit); fit();
+let best = 0; try { best = +localStorage.getItem("tour-best") || 0; } catch (e) {}
+const BH = 26, BASEW = () => Math.min(260, W * 0.55);
+let st = null, cam = 0, falls = [], state = "menu";
+function reset() {
+  const w = BASEW(); st = { blocks: [{ x: W / 2 - w / 2, w, y: 0 }], cur: null, dir: 1, speed: 180, combo: 0, score: 0, perfect: 0 }; falls = []; cam = 0; spawn();
+}
+function spawn() {
+  const top = st.blocks[st.blocks.length - 1], fromLeft = st.blocks.length % 2 === 0;
+  st.cur = { x: 0, w: top.w, y: top.y + BH, base: top.x, ph: fromLeft ? -Math.PI / 2 : Math.PI / 2 };
+  st.amp = Math.min(W * 0.42, 340); st.speed = Math.min(4.6, 1.7 + st.score * 0.07); st.cur.x = st.cur.base + Math.sin(st.cur.ph) * st.amp;
+}
+const col = i => `hsl(${(265 + i * 9) % 360} 75% ${58 + (i % 2) * 5}%)`;
+function drop() {
+  if (state !== "play") return;
+  const c = st.cur, top = st.blocks[st.blocks.length - 1], l = Math.max(c.x, top.x), r = Math.min(c.x + c.w, top.x + top.w), ov = r - l;
+  if (ov <= 0) { falls.push({ ...c, vy: 0, i: st.blocks.length }); st.cur = null; return over(); }
+  let nb;
+  if (Math.abs(c.x - top.x) <= 5) {
+    st.combo++; st.perfect++; nb = { x: top.x, w: top.w, y: c.y };
+    if (st.combo >= 3) { const grow = Math.min(BASEW() - nb.w, 12); nb.x -= grow / 2; nb.w += grow; }
+    $("#combo").textContent = st.combo >= 2 ? `Parfait ×${st.combo}` : "Parfait !";
+  } else {
+    st.combo = 0; $("#combo").textContent = "";
+    nb = { x: l, w: ov, y: c.y };
+    const cut = c.x < top.x ? { x: c.x, w: top.x - c.x } : { x: r, w: c.x + c.w - r };
+    falls.push({ x: cut.x, w: cut.w, y: c.y, vy: 0, i: st.blocks.length });
+  }
+  st.blocks.push(nb); st.score++; $("#score").textContent = st.score; spawn();
+}
+function over() {
+  state = "over"; const s = st.score, rec = s > best;
+  if (rec) { best = s; try { localStorage.setItem("tour-best", s); } catch (e) {} }
+  const perf = st.perfect;
+  if (window.ONLINE) window.ONLINE.submit("tour", g0 => (s <= (g0.best || 0) && g0.played) ? Object.assign(g0, { played: (g0.played || 0) + 1 }) : { best: Math.max(s, g0.best || 0), perfect: Math.max(perf, g0.perfect || 0), played: (g0.played || 0) + 1 });
+  setTimeout(() => { $("#panel").hidden = false; $("#panel").querySelector("h1").textContent = rec ? "Nouveau record !" : `${s} étage${s > 1 ? "s" : ""}`; $("#best").textContent = `Record : ${best} étages · ${perf} placement${perf > 1 ? "s" : ""} parfait${perf > 1 ? "s" : ""}`; $("#go").textContent = "Rejouer"; $("#go").focus(); }, 700);
+}
+function start() { reset(); state = "play"; $("#panel").hidden = true; $("#score").textContent = 0; $("#combo").textContent = ""; }
+$("#go").addEventListener("click", e => { e.stopPropagation(); start(); });
+cv.addEventListener("pointerdown", e => { e.preventDefault(); if (state === "play") drop(); });
+addEventListener("keydown", e => { if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); if (state === "play") drop(); else if (!$("#panel").hidden) start(); } });
+$("#best").textContent = best ? `Record : ${best} étages` : "";
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const sky = g.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, "#1e1036"); sky.addColorStop(1, "#be185d"); g.fillStyle = sky; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 40; i++) { const x = (i * 97) % W, y = ((i * 53 + cam * 0.2) % (H * 0.6)); g.fillStyle = "#ffffff30"; g.fillRect(x, y, 2, 2); }
+  if (st) {
+    if (state === "play" && st.cur) { st.cur.ph += st.speed * dt; st.cur.x = st.cur.base + Math.sin(st.cur.ph) * st.amp; }
+    const target = Math.max(0, st.blocks.length * BH - H * 0.45); cam += (target - cam) * Math.min(1, dt * 4);
+    const base = H - 80, Y = y => base - y + cam;
+    g.fillStyle = "#0f0a1f"; g.fillRect(0, Y(0) + BH, W, H);
+    st.blocks.forEach((b, i) => { g.fillStyle = col(i); g.fillRect(b.x, Y(b.y), b.w, BH); g.fillStyle = "#ffffff30"; g.fillRect(b.x, Y(b.y), b.w, 4); });
+    if (st.cur && state === "play") { const i = st.blocks.length; g.fillStyle = col(i); g.fillRect(st.cur.x, Y(st.cur.y), st.cur.w, BH); g.fillStyle = "#ffffff40"; g.fillRect(st.cur.x, Y(st.cur.y), st.cur.w, 4); }
+    falls.forEach(f => { f.vy += 1500 * dt; f.y -= f.vy * dt; g.fillStyle = col(f.i); g.globalAlpha = 0.8; g.fillRect(f.x, Y(f.y), f.w, BH); g.globalAlpha = 1; });
+    falls = falls.filter(f => Y(f.y) < H + 100);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+}
+</script>
+<script type="module" src="../shared/online.js"></script>
+</body>
+</html>

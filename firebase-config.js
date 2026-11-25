@@ -5,5 +5,6 @@ window.FIREBASE_CONFIG = {
   projectId: "ligne1",
   storageBucket: "ligne1.firebasestorage.app",
   messagingSenderId: "488451680116",
-  appId: "1:488451680116:web:fd2ce1c6c425a43c432e21"
+  appId: "1:488451680116:web:fd2ce1c6c425a43c432e21",
+  databaseURL: "https://ligne1-default-rtdb.europe-west1.firebasedatabase.app"
 };

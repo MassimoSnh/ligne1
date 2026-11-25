@@ -1,29 +1,52 @@
-# Ligne 1 — mise en ligne
+# L'Arcade de l'atelier — mise à jour
 
-Le dossier contient tout le jeu. Deux étapes : créer la base Firebase (classement, pseudos), puis héberger le jeu sur GitHub Pages (gratuit).
+Cinq jeux : Ligne 1, Volt, Le Casino, Bloc Assaut, La Tour. Un seul compte, un classement par jeu et un classement général.
 
-## 1. Firebase (environ 10 min)
+## Mettre à jour le site (GitHub)
 
-1. Va sur https://console.firebase.google.com avec ton compte Google, clique **Créer un projet**, nomme-le `ligne1`, désactive Google Analytics, puis **Créer**.
-2. Sur la page du projet, clique l'icône **Web** `</>`. Nomme l'appli `ligne1-web`, ne coche pas Hosting, puis **Enregistrer l'application**.
-3. Firebase affiche un bloc `const firebaseConfig = { apiKey: ..., ... }`. Ouvre `firebase-config.js` et remplace les valeurs par les tiennes (apiKey, authDomain, projectId, storageBucket, messagingSenderId, appId).
-4. Menu de gauche **Créer > Authentication > Commencer**. Dans l'onglet **Mode de connexion**, active **Anonyme**, puis **Google** (choisis ton e-mail d'assistance) et enregistre.
-5. Menu **Créer > Firestore Database > Créer une base de données**. Emplacement : `eur3 (europe-west)`. Mode : **production**. Puis **Créer**.
-6. Onglet **Règles** de Firestore : efface tout, colle le contenu du fichier `firestore.rules`, puis **Publier**.
+1. Sur github.com/MassimoSnh/ligne1, supprime l'ancien dossier **js** qui est à la racine :
+   clique sur le dossier `js`, puis les trois points « … » en haut à droite, puis **Delete directory** et **Commit changes**.
+   (Ligne 1 a maintenant son propre dossier `ligne1/js`.)
+2. Sur la page d'accueil du dépôt : **Add file > Upload files**. Glisse TOUT le contenu du dossier `arcade` :
+   `index.html`, `firebase-config.js`, `firestore.rules`, `database.rules.json`, `LISEZMOI.md` et les dossiers `shared`, `ligne1`, `volt`, `casino`, `tir`, `tour`.
+   GitHub remplace les anciens fichiers. Clique **Commit changes**.
+3. Attends 1 à 2 minutes, puis ouvre le site avec Ctrl+F5.
 
-## 2. GitHub Pages
+## Mettre à jour les règles Firebase (obligatoire)
 
-7. Sur https://github.com (crée un compte si besoin), clique **New repository**. Nom : `ligne1`, visibilité **Public**, puis **Create repository**.
-8. Clique **uploading an existing file**. Glisse TOUT le contenu du dossier (index.html, firebase-config.js, firestore.rules, le dossier js…), puis **Commit changes**.
-9. Dans le dépôt : **Settings > Pages**. Source : **Deploy from a branch**, branche `main`, dossier `/ (root)`, puis **Save**. Après 1 à 2 minutes, le jeu est en ligne sur `https://TON-NOM-GITHUB.github.io/ligne1/`.
-10. Retour dans Firebase : **Authentication > Paramètres > Domaines autorisés > Ajouter un domaine** et mets `TON-NOM-GITHUB.github.io` (sinon la connexion Google est refusée).
+Console Firebase > Firestore Database > onglet **Règles** : efface tout, colle le contenu du nouveau `firestore.rules`, puis **Publier**.
 
-## Inviter les collègues
+## Activer la base temps réel (obligatoire pour le multi, le Saloon et « en ligne »)
 
-Crée ton pseudo (bouton jaune sur la carte), va dans ton **Profil** et copie ton lien d'invitation. Tes collègues l'ouvrent, créent leur pseudo, et vous êtes reliés.
+1. Console Firebase, projet **ligne1** > menu de gauche **Build > Realtime Database** > **Créer une base de données**.
+2. Emplacement : **Belgique (europe-west1)**. Mode : **verrouillé**. Valide.
+3. En haut de la page, l'adresse de la base s'affiche. Elle doit être exactement
+   `https://ligne1-default-rtdb.europe-west1.firebasedatabase.app`.
+   Si elle est différente, recopie-la dans `firebase-config.js` (ligne `databaseURL`) avant l'envoi sur GitHub.
+4. Onglet **Règles** de la Realtime Database : efface tout, colle le contenu de `database.rules.json`, puis **Publier**.
 
-## Bon à savoir
+C'est gratuit : la formule Spark couvre largement une équipe (100 connexions simultanées).
 
-- La clé `apiKey` de Firebase n'est pas un secret : c'est normal qu'elle soit dans le fichier. La sécurité, ce sont les règles Firestore.
-- Les points sont calculés dans le navigateur : un petit malin avec les outils développeur pourrait tricher. Entre collègues, ça suffit.
-- Pour une mise à jour du jeu, il suffit de re-déposer les fichiers modifiés sur GitHub.
+## Facultatif : renommer le site en « arcade »
+
+Dans le dépôt GitHub : **Settings**, champ **Repository name**, remplace `ligne1` par `arcade`, puis **Rename**.
+L'adresse devient `https://massimosnh.github.io/arcade/`. Rien à changer dans Firebase (même domaine).
+Pense juste à renvoyer le nouveau lien d'invitation à tes collègues.
+
+## Les points
+
+| Jeu | Classement du jeu | Ce qui compte au général |
+|---|---|---|
+| Ligne 1 | 100 pts par étoile + bonus de vitesse | les points du jeu |
+| Volt | 50 pts par niveau fini + 100 par étoile + bonus chrono | les points du jeu |
+| Le Casino | coins de la semaine (100 offerts chaque lundi) | meilleur gain au-delà des 100 coins, max 3 000 |
+| Bloc Assaut | solo : 100 par robot (250 les rouges), +50 tête, 250 × vague nettoyée, bonus précision | record solo ÷ 4, + 100 par victoire en multi et + 5 par élimination (bonus multi plafonné à 4 000) |
+| La Tour | étages | record × 25 |
+
+## Le multijoueur
+
+- **Bloc Assaut** : « Multijoueur entre collègues » > choisis Match à mort ou Domination > **Créer un salon**. Donne le code à 5 caractères. Les autres font « Rejoindre » avec le code. Tu lances quand vous êtes au moins 2 (8 max). Tab (ou le bouton Scores sur téléphone) affiche le tableau.
+- **Le Saloon** (onglet du Casino) : roulette et blackjack partagés, même tirage pour tout le monde, avec la liste des présents et un chat.
+- Sur toutes les pages, la pastille verte « N en ligne » montre qui est connecté et où.
+
+Les anciens scores de Ligne 1 sont repris automatiquement à la première connexion.

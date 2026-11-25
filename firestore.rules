@@ -12,8 +12,9 @@ service cloud.firestore {
         && request.resource.data.pseudoLower == request.resource.data.pseudo.lower()
         && getAfter(/databases/$(database)/documents/pseudos/$(request.resource.data.pseudoLower)).data.uid == uid
         && request.resource.data.points is int
-        && request.resource.data.points >= 0 && request.resource.data.points <= 8000
-        && request.resource.data.friends is list && request.resource.data.friends.size() <= 200;
+        && request.resource.data.points >= 0 && request.resource.data.points <= 1000000
+        && request.resource.data.friends is list && request.resource.data.friends.size() <= 200
+        && (!('games' in request.resource.data) || request.resource.data.games is map);
       allow delete: if false;
     }
 
