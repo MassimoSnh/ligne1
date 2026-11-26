@@ -200,6 +200,7 @@ function showResult() {
   if (k === "win" && w.marcheCount > 1) msg = `Ça marche, mais il a fallu appuyer ${w.marcheCount} fois sur Marche. Le client veut une ligne qui repart toute seule.`;
   else if (k === "win" && st < 3) msg += ` Pour plus d'étoiles : moins de ${tg.t} s et ${tg.c} contacts ou moins.`;
   $("#result").className = k;
+  if (window.SFX) window.SFX.play(k === "win" ? "win" : k === "fail" ? "lose" : "ok");
   $("#result").innerHTML = `<h3>${{ win: "Réussi !", fail: "Raté", warn: "Presque…" }[k]}</h3><div class="stars" aria-label="${st} étoiles sur 3">${"★".repeat(st)}${"☆".repeat(3 - st)}</div><p>${msg}</p>
     <div class="small">Temps : ${SIM.elapsed().toFixed(1)} s · Contacts : ${contacts()} · Appuis sur Marche : ${w.marcheCount}</div>
     <div class="row"><button class="ghost" data-go="r">Rejouer</button>${k !== "fail" && cur < 20 ? `<button class="cta" data-go="n">Niveau suivant</button>` : ""}<button class="ghost" data-go="m">Carte</button></div>`;

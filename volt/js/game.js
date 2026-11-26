@@ -147,7 +147,7 @@ function frame(now) {
       while (acc >= V.DT) {
         acc -= V.DT; readInput();
         if (S.dead) { deadT += V.DT; if (deadT > 0.45) respawn(); }
-        else { V.step(L, S, input); if (S.dashT > 0) trail.push({ x: S.x, y: S.y, a: 0.5 }); if (S.dead) { deaths++; for (let i = 0; i < 24; i++) fx.push({ x: S.x, y: S.y - 10, vx: Math.cos(i) * (80 + i * 6), vy: Math.sin(i) * (80 + i * 6), l: 1, c: i % 2 ? "#facc15" : "#e2e8f0" }); } if (S.got !== prevGot) { const i = Math.log2(S.got ^ prevGot) | 0, s = L.stars[i]; if (s) for (let k = 0; k < 14; k++) fx.push({ x: s.x, y: s.y, vx: Math.cos(k) * 120, vy: Math.sin(k) * 120, l: 0.8, c: "#fde047" }); } prevGot = S.got; if (S.won) finish(); }
+        else { const pvy = S.vy, pd = S.dashT || 0; V.step(L, S, input); if (window.SFX) { if ((S.dashT || 0) > 0 && !(pd > 0)) window.SFX.play("dash"); else if (S.vy < pvy - 120 && S.vy < 0) window.SFX.play("jump"); if (S.dead) window.SFX.play("die"); if (S.got !== prevGot) window.SFX.play("coin"); if (S.won) window.SFX.play("win"); } if (S.dashT > 0) trail.push({ x: S.x, y: S.y, a: 0.5 }); if (S.dead) { deaths++; for (let i = 0; i < 24; i++) fx.push({ x: S.x, y: S.y - 10, vx: Math.cos(i) * (80 + i * 6), vy: Math.sin(i) * (80 + i * 6), l: 1, c: i % 2 ? "#facc15" : "#e2e8f0" }); } if (S.got !== prevGot) { const i = Math.log2(S.got ^ prevGot) | 0, s = L.stars[i]; if (s) for (let k = 0; k < 14; k++) fx.push({ x: s.x, y: s.y, vx: Math.cos(k) * 120, vy: Math.sin(k) * 120, l: 0.8, c: "#fde047" }); } prevGot = S.got; if (S.won) finish(); }
         trail.forEach(p => p.a -= V.DT * 2.5); trail = trail.filter(p => p.a > 0);
         fx.forEach(p => { p.x += p.vx * V.DT; p.y += p.vy * V.DT; p.vy += 400 * V.DT; p.l -= V.DT * 1.5; }); fx = fx.filter(p => p.l > 0);
       }

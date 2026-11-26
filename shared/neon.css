@@ -1,0 +1,4 @@
+/* Habillage néon commun aux écrans de départ des jeux */
+.panel h1{font:400 clamp(18px,4.2vw,26px)/1.45 "Press Start 2P",ui-monospace,monospace!important;letter-spacing:.02em;text-shadow:0 0 8px currentColor,0 0 22px color-mix(in srgb,currentColor 60%,transparent)}
+.panel{box-shadow:0 0 0 4px #0a0716,0 0 40px #0009}
+.navbtn{border-color:#4c1d95}

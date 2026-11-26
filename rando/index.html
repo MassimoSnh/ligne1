@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>La Rando Folle · Arcade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@800&family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: joyeux, bousculade, on rigole des chutes
+   IDEA: une course d'obstacles en pleine nature avec des petites grenouilles
+   PICTURE: la scène 3D plein écran, ciel bleu, rivière, montagne, nénuphars
+   COLOUR and TYPE: vert prairie, bleu rivière, couleurs bonbon pour les persos ; Inter Tight
+   LAYOUT: plein écran, manche et chrono en haut, commandes tactiles en bas */
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#7dd3fc;color:#fff;font-family:Inter,system-ui,sans-serif;user-select:none;-webkit-user-select:none}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.top{position:fixed;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:max(10px,env(safe-area-inset-top)) 12px 0;z-index:4}
+.navbtn{display:inline-flex;align-items:center;min-height:44px;padding:8px 14px;border-radius:12px;background:#ffffffe0;color:#14532d;text-decoration:none;font-weight:800}
+#hud{position:fixed;left:50%;top:max(12px,env(safe-area-inset-top));transform:translateX(-50%);text-align:center;z-index:3;pointer-events:none;text-shadow:0 2px 8px #0008}
+#round{font:800 20px "Inter Tight",sans-serif}#info{font-weight:700;font-size:15px;margin-top:2px}
+#banner{position:fixed;left:50%;top:34%;transform:translate(-50%,-50%);font:800 clamp(34px,7vw,72px) "Inter Tight",sans-serif;text-align:center;pointer-events:none;z-index:3;text-shadow:0 4px 0 #0005,0 0 30px #0006;white-space:nowrap}
+#sub{position:fixed;left:50%;top:calc(34% + 52px);transform:translateX(-50%);font-weight:800;font-size:18px;pointer-events:none;z-index:3;text-shadow:0 2px 8px #000a;text-align:center}
+.panel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fffef5f2;color:#1f2937;border:4px solid #22c55e;border-radius:22px;padding:22px 26px;width:min(480px,92%);text-align:center;z-index:5;max-height:92vh;overflow:auto;box-shadow:0 10px 0 #15803d,0 20px 50px #0005}
+.panel h1{font:800 40px "Inter Tight",sans-serif;margin:0 0 6px;color:#16a34a}.panel p{margin:8px 0;color:#374151;line-height:1.5}
+.panel table{width:100%;border-collapse:collapse;margin:10px 0}.panel td,.panel th{padding:6px;border-bottom:1px solid #e5e7eb;text-align:left}.panel .n{text-align:right}
+.btn{min-height:52px;padding:10px 24px;border:0;border-radius:14px;background:#22c55e;color:#fff;font:800 18px Inter;cursor:pointer;margin:6px;box-shadow:0 5px 0 #15803d}
+.btn.alt{background:#3b82f6;box-shadow:0 5px 0 #1d4ed8}
+.ghost{min-height:44px;padding:8px 16px;border-radius:12px;border:2px solid #d1d5db;background:#fff;color:#1f2937;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;margin:6px;cursor:pointer}
+.btn:focus-visible,.ghost:focus-visible,.navbtn:focus-visible{outline:3px solid #111;outline-offset:2px}
+.keys{font-size:14px;color:#6b7280}
+.legend{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;text-align:left}
+.legend div{background:#f0fdf4;border:2px solid #bbf7d0;border-radius:12px;padding:8px;font-size:13px}.legend b{display:block;color:#15803d}
+.touch{display:none}
+@media (pointer:coarse){
+  .touch{display:block}
+  #stick{position:fixed;left:24px;bottom:max(28px,env(safe-area-inset-bottom));width:130px;height:130px;border-radius:50%;background:#ffffff30;border:3px solid #ffffff70;touch-action:none;z-index:4}
+  #knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px;border-radius:50%;background:#ffffffa0}
+  .tb{position:fixed;border-radius:50%;border:3px solid #ffffffa0;font:800 14px Inter;color:#fff;touch-action:none;z-index:4}
+  #tjump{right:26px;bottom:max(36px,env(safe-area-inset-bottom));width:96px;height:96px;background:#22c55ecc}
+  #tdive{right:134px;bottom:max(30px,env(safe-area-inset-bottom));width:70px;height:70px;background:#f97316cc}
+  .keys{display:none}
+}
+#pill{z-index:4}.pillbtn{display:inline-flex;align-items:center;min-height:42px;padding:6px 14px;border-radius:12px;background:#fde68a;color:#111;text-decoration:none;font-weight:800}.pillbtn.me{background:#fff}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#000;color:#fff;padding:12px 18px;border-radius:10px;z-index:80;max-width:90vw}
+</style>
+<link rel="manifest" href="../manifest.webmanifest">
+<meta name="theme-color" content="#7dd3fc">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Arcade">
+<link rel="apple-touch-icon" href="../icons/apple-180.png">
+<link rel="icon" href="../icons/icon-192.png">
+<script src="../shared/app.js"></script>
+</head>
+<body>
+<canvas id="c" aria-label="La Rando Folle"></canvas>
+<div class="top"><a class="navbtn" href="../">← Arcade</a><span id="pill"></span></div>
+<div id="hud"><div id="round"></div><div id="info"></div></div>
+<div id="banner" role="status"></div><div id="sub"></div>
+<div class="touch"><div id="stick" aria-label="Déplacement"><div id="knob"></div></div><button class="tb" id="tjump" aria-label="Sauter">SAUT</button><button class="tb" id="tdive" aria-label="Plonger">PLONGE</button></div>
+<div class="panel" id="panel">
+  <h1>La Rando Folle</h1>
+  <p>Une course d'obstacles en pleine nature. Bouscule-toi avec les autres, évite les rondins et les rochers, et qualifie-toi jusqu'à la finale.</p>
+  <div class="legend"><div><b>1 · La Rivière</b>Rondins flottants et troncs qui roulent</div><div><b>2 · La Montagne</b>Rochers, troncs qui balancent, pont qui s'effondre</div><div><b>3 · Les Nénuphars</b>Ils coulent sous tes pieds : le dernier debout gagne</div></div>
+  <p class="keys">Flèches ou ZQSD pour courir · Espace pour sauter · Maj pour plonger</p>
+  <button class="btn" id="solo">Solo contre 7 robots</button><br>
+  <button class="btn alt" id="multi">Multijoueur entre collègues</button><br>
+  <a class="ghost" href="../">← Arcade</a>
+</div>
+<div id="toast" role="status" hidden></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="../firebase-config.js"></script>
+<script src="../shared/games.js"></script>
+<script src="../shared/lobby.js"></script>
+<script src="game.js"></script>
+<script type="module" src="../shared/online.js"></script>
+</body>
+</html>

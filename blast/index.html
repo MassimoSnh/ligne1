@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Blast · Arcade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@800&family=Inter:wght@400;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+/* VOICE: nerveux, on se piège entre collègues
+   IDEA: une arène de salle d'arcade, néon violet, bombes qui clignotent
+   PICTURE: la grille elle-même, plein écran
+   COLOUR and TYPE: nuit violette, chaque joueur sa couleur ; Press Start 2P pour les titres, Inter
+   LAYOUT: barre du haut, joueurs et manches, arène au centre, commandes tactiles en bas */
+:root{color-scheme:dark}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#0a0716;color:#f5f3ff;font-family:Inter,system-ui,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+.top{position:fixed;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:max(10px,env(safe-area-inset-top)) 12px 0;z-index:3}
+.navbtn,.pillbtn{display:inline-flex;align-items:center;min-height:44px;padding:8px 14px;border-radius:10px;border:2px solid #4c1d95;background:#120c24;text-decoration:none;font-weight:600;color:#f5f3ff}
+.pillbtn{background:#facc15;color:#111;border-color:#facc15}.pillbtn.me{background:#f5f3ff;color:#111;border-color:#f5f3ff;font-weight:500}
+#timer{font:400 16px "Press Start 2P",monospace;color:#facc15;text-shadow:0 0 10px #f59e0b}
+#players{position:fixed;left:0;right:0;top:64px;display:flex;flex-wrap:wrap;justify-content:center;gap:6px;z-index:2;padding:0 8px;pointer-events:none}
+.chip{display:inline-flex;align-items:center;gap:6px;background:#120c24;border:1px solid #2e2260;border-radius:20px;padding:4px 10px;font-size:13px;font-weight:600}
+.chip i{width:10px;height:10px;border-radius:50%}.chip b{color:#facc15;letter-spacing:1px;font-size:11px}.chip.dead{opacity:.4;text-decoration:line-through}
+#stats{position:fixed;left:12px;bottom:max(12px,env(safe-area-inset-bottom));display:flex;gap:8px;z-index:2;font:400 11px "Press Start 2P",monospace;pointer-events:none}
+#stats span{background:#120c24;border:1px solid #4c1d95;border-radius:8px;padding:8px}
+#feed{position:fixed;right:12px;bottom:max(12px,env(safe-area-inset-bottom));text-align:right;font-size:14px;line-height:1.7;z-index:2;pointer-events:none}
+#banner{position:fixed;left:0;right:0;top:100px;text-align:center;font:800 22px "Inter Tight",sans-serif;color:#facc15;z-index:2;pointer-events:none;text-shadow:0 2px 10px #000}
+.panel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;background:#120c24f0;padding:24px 26px;border-radius:16px;z-index:5;width:min(460px,92%);border:2px solid #f97316;box-shadow:0 0 0 4px #0a0716,0 0 40px #f9731644;max-height:92vh;overflow:auto}
+.panel h1{font:400 26px "Press Start 2P",monospace;margin:0 0 12px;line-height:1.3;color:#fff;text-shadow:0 0 8px #fb923c,0 0 22px #ea580c}
+.panel p{margin:8px 0;color:#c4b5fd;line-height:1.5}
+.btn{min-height:52px;padding:10px 24px;border:0;border-radius:12px;background:#f97316;color:#1c0a00;font:800 17px Inter;cursor:pointer;margin:6px 4px}
+.btn.alt{background:#3b82f6;color:#fff}
+.ghost{min-height:44px;padding:8px 16px;border:2px solid #4c1d95;border-radius:10px;background:transparent;color:#f5f3ff;font:600 15px Inter;cursor:pointer;margin:6px 4px;text-decoration:none;display:inline-flex;align-items:center}
+.btn:focus-visible,.ghost:focus-visible,.navbtn:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.keys{font-size:14px;color:#a78bfa}
+.arns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:10px 0}
+.arn{display:flex;flex-direction:column;gap:2px;text-align:left;padding:8px 10px;border-radius:10px;border:2px solid #2e2260;background:#0a0716;color:#f5f3ff;cursor:pointer;font:500 12px/1.35 Inter}
+.arn b{font-size:14px}.arn span{color:#a78bfa}.arn[aria-pressed=true]{border-color:#f97316;box-shadow:0 0 12px #f9731655}
+#touch{display:none}
+@media (pointer:coarse){
+  #touch{display:block}
+  #stick{position:fixed;left:max(18px,env(safe-area-inset-left));bottom:max(24px,env(safe-area-inset-bottom));width:132px;height:132px;border-radius:50%;background:#ffffff14;border:2px solid #ffffff33;z-index:4;touch-action:none}
+  #knob{position:absolute;left:41px;top:41px;width:50px;height:50px;border-radius:50%;background:#ffffff66}
+  #bombbtn{position:fixed;right:max(22px,env(safe-area-inset-right));bottom:max(34px,env(safe-area-inset-bottom));width:104px;height:104px;border-radius:50%;border:3px solid #fde047;background:#f97316cc;color:#1c0a00;font:800 16px Inter;z-index:4;touch-action:none}
+  #detbtn{position:fixed;right:max(136px,calc(env(safe-area-inset-right) + 136px));bottom:max(40px,env(safe-area-inset-bottom));width:74px;height:74px;border-radius:50%;border:3px solid #fecaca;background:#dc2626cc;color:#fff;font:800 14px Inter;z-index:4;touch-action:none}
+  #stats{bottom:auto;top:96px;left:8px;font-size:9px}#stats span{padding:5px}
+  #feed{bottom:auto;top:96px;font-size:12px}
+  .keys{display:none}
+}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#000;color:#fff;padding:12px 18px;border-radius:10px;z-index:80;max-width:90vw}
+</style>
+<link rel="manifest" href="../manifest.webmanifest">
+<meta name="theme-color" content="#0a0716">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Arcade">
+<link rel="apple-touch-icon" href="../icons/apple-180.png">
+<link rel="icon" href="../icons/icon-192.png">
+<script src="../shared/app.js"></script>
+</head>
+<body>
+<canvas id="cv" aria-label="Arène de Blast"></canvas>
+<div class="top"><a class="navbtn" href="../">← Arcade</a><span id="timer"></span><span id="pill"></span></div>
+<div id="players"></div>
+<div id="banner" role="status"></div>
+<div id="stats"></div>
+<div id="feed"></div>
+<div id="touch"><div id="stick" aria-label="Déplacement"><div id="knob"></div></div><button id="bombbtn" aria-label="Poser une bombe">BOMBE</button><button id="detbtn" aria-label="Faire sauter mes bombes" hidden>BOUM</button></div>
+<div class="panel" id="panel">
+  <h1>BLAST</h1>
+  <p>Pose des bombes pour casser les caisses, ramasse les bonus et piège les autres. Le premier à 3 manches gagne. Au bout de 1 min 30, les murs se referment.</p>
+  <p class="keys">Flèches ou ZQSD pour bouger · Espace pour poser une bombe · R pour la télécommande</p>
+  <p style="font-size:13px">Nouveaux bonus : <b style="color:#4ade80">coup de pied</b> (fonce dans une bombe pour la pousser), <b style="color:#f87171">télécommande</b> (tes bombes sautent quand tu veux), <b style="color:#67e8f9">bouclier</b> (encaisse une explosion).</p>
+  <div class="arns" id="arenas"></div>
+  <button class="btn" id="solo">Solo contre 3 robots</button><button class="btn" id="solo2" style="background:#facc15">2 contre 2 (toi + 1 robot)</button><br>
+  <button class="btn alt" id="multi">Multijoueur entre collègues</button><br>
+  <a class="ghost" href="../">← Arcade</a>
+</div>
+<div id="toast" role="status" hidden></div>
+<script src="../firebase-config.js"></script>
+<script src="../shared/games.js"></script>
+<script src="../shared/lobby.js"></script>
+<script src="game.js"></script>
+<script type="module" src="../shared/online.js"></script>
+</body>
+</html>

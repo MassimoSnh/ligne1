@@ -28,6 +28,17 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 .btn:focus-visible,.navbtn:focus-visible{outline:3px solid #fff;outline-offset:2px}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#000;color:#fff;padding:12px 18px;border-radius:10px;z-index:80;max-width:90vw}
 </style>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/neon.css">
+<link rel="manifest" href="../manifest.webmanifest">
+<meta name="theme-color" content="#0a0716">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Arcade">
+<link rel="apple-touch-icon" href="../icons/apple-180.png">
+<link rel="icon" href="../icons/icon-192.png">
+<script src="../shared/app.js"></script>
 </head>
 <body>
 <canvas id="cv" aria-label="La tour de blocs"></canvas>
@@ -67,11 +78,11 @@ function drop() {
   if (ov <= 0) { falls.push({ ...c, vy: 0, i: st.blocks.length }); st.cur = null; return over(); }
   let nb;
   if (Math.abs(c.x - top.x) <= 5) {
-    st.combo++; st.perfect++; nb = { x: top.x, w: top.w, y: c.y };
+    st.combo++; st.perfect++; nb = { x: top.x, w: top.w, y: c.y }; window.SFX && window.SFX.play("perfect");
     if (st.combo >= 3) { const grow = Math.min(BASEW() - nb.w, 12); nb.x -= grow / 2; nb.w += grow; }
     $("#combo").textContent = st.combo >= 2 ? `Parfait ×${st.combo}` : "Parfait !";
   } else {
-    st.combo = 0; $("#combo").textContent = "";
+    st.combo = 0; $("#combo").textContent = ""; window.SFX && window.SFX.play("place");
     nb = { x: l, w: ov, y: c.y };
     const cut = c.x < top.x ? { x: c.x, w: top.x - c.x } : { x: r, w: c.x + c.w - r };
     falls.push({ x: cut.x, w: cut.w, y: c.y, vy: 0, i: st.blocks.length });
@@ -79,6 +90,7 @@ function drop() {
   st.blocks.push(nb); st.score++; $("#score").textContent = st.score; spawn();
 }
 function over() {
+  window.SFX && window.SFX.play("crash");
   state = "over"; const s = st.score, rec = s > best;
   if (rec) { best = s; try { localStorage.setItem("tour-best", s); } catch (e) {} }
   const perf = st.perfect;

@@ -61,7 +61,7 @@ function markBets() {
 $("#board").onclick = e => {
   const c = e.target.closest("[data-k]"); if (!c || busy) return;
   if (totalBets() + chipR > wal.coins) { $("#msgR").textContent = "Pas assez de coins pour ce jeton."; $("#msgR").className = "msg lose"; return; }
-  bets[c.dataset.k] = (bets[c.dataset.k] || 0) + chipR; $("#msgR").textContent = ""; markBets();
+  bets[c.dataset.k] = (bets[c.dataset.k] || 0) + chipR; $("#msgR").textContent = ""; markBets(); window.SFX && window.SFX.play("chip");
 };
 $("#clear").onclick = () => { if (!busy) { bets = {}; markBets(); } };
 function drawWheel(hl) {
@@ -86,6 +86,7 @@ $("#spin").onclick = () => {
   const start = ang, end = target - 2 * Math.PI * (5 + Math.ceil((start - target) / (2 * Math.PI))), t0 = performance.now(), D = 3800;
   const anim = now => {
     const k = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - k, 3); ang = start + (end - start) * e; drawWheel();
+    const pk = Math.floor(ang / (2 * Math.PI / 37)); if (pk !== anim.pk) { anim.pk = pk; window.SFX && window.SFX.play("tick"); }
     if (k < 1) return requestAnimationFrame(anim);
     ang = target; drawWheel(res);
     let win = 0; const red = REDS.has(res);
@@ -109,7 +110,7 @@ $("#spin").onclick = () => {
 const bj = { active: false, bet: 5, p: [], d: [], doubled: false };
 chips($("#chipsB"), () => bj.bet, v => bj.bet = v);
 const SUITS = ["♠", "♥", "♦", "♣"], RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
-const draw1 = () => ({ r: RANKS[Math.floor(Math.random() * 13)], s: SUITS[Math.floor(Math.random() * 4)] });
+const draw1 = () => (window.SFX && window.SFX.play("card"), { r: RANKS[Math.floor(Math.random() * 13)], s: SUITS[Math.floor(Math.random() * 4)] });
 function val(h) { let t = 0, a = 0; for (const c of h) { if (c.r === "A") { a++; t += 11; } else t += ["J", "Q", "K"].includes(c.r) ? 10 : +c.r; } while (t > 21 && a) { t -= 10; a--; } return t; }
 const cardH = c => `<div class="card${c.s === "♥" || c.s === "♦" ? " red" : ""}"><span>${c.r}</span><span class="s">${c.s}</span></div>`;
 function renderBJ(hide) {
@@ -163,7 +164,7 @@ $("#pull").onclick = () => {
   if (busy || wal.coins < 1) return; const bet = Math.min(chipS, wal.coins);
   busy = true; wal.coins -= bet; show(); $("#msgS").textContent = ""; $("#msgS").className = "msg";
   const res = [0, 1, 2].map(() => REEL[Math.floor(Math.random() * REEL.length)]);
-  [0, 1, 2].forEach(i => { const r = $("#r" + i); r.classList.add("spin"); const iv = setInterval(() => { r.innerHTML = SYM[REEL[Math.floor(Math.random() * REEL.length)]]; }, 80); setTimeout(() => { clearInterval(iv); r.classList.remove("spin"); r.innerHTML = SYM[res[i]]; if (i === 2) finish(); }, 900 + i * 450); });
+  [0, 1, 2].forEach(i => { const r = $("#r" + i); r.classList.add("spin"); const iv = setInterval(() => { r.innerHTML = SYM[REEL[Math.floor(Math.random() * REEL.length)]]; if (i === 0) window.SFX && window.SFX.play("reel"); }, 80); setTimeout(() => { clearInterval(iv); r.classList.remove("spin"); r.innerHTML = SYM[res[i]]; if (i === 2) finish(); }, 900 + i * 450); });
   function finish() {
     let mult = 0; if (res[0] === res[1] && res[1] === res[2]) mult = PAY[res[0]];
     else { const ch = res.filter(s => s === "cherry").length; mult = ch === 2 ? 2 : ch === 1 ? 1 : 0; }
@@ -176,3 +177,10 @@ $("#pull").onclick = () => {
 board(); drawWheel(); renderBJ(); show();
 window.CASINO = { get wal() { return wal; }, spend(n) { if (n > wal.coins || n <= 0) return false; wal.coins -= n; show(); return true; }, gain(n) { wal.coins += n; show(); }, commit: save, get online() { return online; } };
 }
+
+/* sons de gain et de perte : on écoute les messages de résultat */
+(() => {
+  const seen = new WeakMap();
+  const mo = new MutationObserver(ms => { for (const m of ms) { const el = m.target.nodeType === 1 ? m.target : m.target.parentElement; if (!el || !el.classList || !el.classList.contains("msg")) continue; const key = el.className + "|" + el.textContent; if (seen.get(el) === key) continue; seen.set(el, key); if (!window.SFX) continue; if (/JACKPOT|Blackjack !/.test(el.textContent) && el.classList.contains("win")) window.SFX.play("win"); else if (el.classList.contains("win")) window.SFX.play("coin"); else if (el.classList.contains("lose") && /-\d|Perdu|perdu|gagne\./.test(el.textContent)) window.SFX.play("lose"); } });
+  document.querySelectorAll(".msg").forEach(el => mo.observe(el, { attributes: true, attributeFilter: ["class"], childList: true, characterData: true, subtree: true }));
+})();

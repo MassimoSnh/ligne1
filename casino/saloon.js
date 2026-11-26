@@ -24,6 +24,7 @@ async function open() {
   R.d.onValue(ref("players"), s => { players = s.val() || {}; renderPlayers(); });
   R.d.onValue(ref("bets"), s => { bets = s.val() || {}; renderBets(); });
   R.d.onValue(ref("bj"), s => { bjs = s.val() || {}; });
+  R.d.onValue(ref("rr"), s => { rr = s.val(); rrSeen(); });
   R.d.onChildAdded(R.d.query(ref("chat"), R.d.limitToLast(60)), s => addChat(s.val()));
   window.ONLINE.setDetail("au Saloon");
   say(`${R.pseudo} pousse les portes du saloon.`, true);
@@ -34,7 +35,7 @@ function syncMe() { if (R) R.d.update(ref(`players/${R.uid}`), { coins: K().wal.
 document.querySelector(".subtabs").onclick = e => {
   const b = e.target.closest("[data-s]"); if (!b) return; sub = b.dataset.s;
   document.querySelectorAll(".subtabs .tab").forEach(t => t.setAttribute("aria-pressed", t === b));
-  $("#s-r").hidden = sub !== "r"; $("#s-b").hidden = sub !== "b"; syncMe();
+  $("#s-r").hidden = sub !== "r"; $("#s-b").hidden = sub !== "b"; $("#s-rr").hidden = sub !== "rr"; syncMe();
 };
 function renderPlayers() {
   const L = Object.entries(players);
@@ -176,6 +177,195 @@ function outcome(b, D) {
   return { pay: 0, txt: "Perdu." };
 }
 
-function loop() { if (R) { try { rouletteTick(); bjTick(); if ((++frameN) % 15 === 0) renderBets(); } catch (e) { console.error(e); } } requestAnimationFrame(loop); }
-window.SALOON = { open, say };
+/* ---------- roulette russe (version cartoon, pistolet à bouchon) ---------- */
+const FEE = 20, MAXS = 6, WAITS = 15000, TURN = 15000, ENDW = 9000, SEATC = ["#f59e0b", "#38bdf8", "#f472b6", "#4ade80", "#a78bfa", "#fb7185"];
+let rr = null, rrLast = 0, rrAng = 0, rrBusy = false, rrSeenTurn = "", rrPaidId = "";
+const snd = n => window.SFX && window.SFX.play(n);
+const rrRef = () => ref("rr");
+const seatsOf = g => Object.entries((g && g.seats) || {}).sort((a, b) => a[1].i - b[1].i);
+const aliveOf = g => (g.order || []).filter(u => g.seats[u] && !g.seats[u].out);
+function rrMsg(t, cls) { $("#rrmsg").textContent = t; $("#rrmsg").className = "msg " + (cls || ""); }
+async function tx(fn) { if (!R || rrBusy) return null; rrBusy = true; try { return await R.d.runTransaction(rrRef(), fn); } catch (e) { console.error(e); return null; } finally { rrBusy = false; } }
+const fresh = () => ({ id: Math.random().toString(36).slice(2, 9), state: "wait", seats: {}, pot: 0 });
+$("#rrsit").onclick = async () => {
+  if (!R) return; if (rr && rr.seats && rr.seats[R.uid]) return;
+  if (!K().spend(FEE)) return rrMsg(`Il faut ${FEE} coins pour s'asseoir.`, "lose");
+  K().commit(); let ok = false;
+  const r = await tx(g => {
+    ok = false; if (!g || (g.state === "end" && now() > (g.endAt || 0) + ENDW)) g = fresh();
+    if (g.state !== "wait") return g; g.seats = g.seats || {}; const n = Object.keys(g.seats).length;
+    if (g.seats[R.uid] || n >= MAXS) return g;
+    const used = new Set(Object.values(g.seats).map(x => x.i)); let i = 0; while (used.has(i)) i++;
+    g.seats[R.uid] = { p: R.pseudo, i, out: false }; g.pot = (g.pot || 0) + FEE; ok = true;
+    if (n + 1 >= 2 && !g.startAt) g.startAt = now() + WAITS;
+    return g;
+  });
+  if (!r || !ok) { K().gain(FEE); K().commit(); return rrMsg("Impossible de s'asseoir : la partie a commencé ou la table est pleine.", "lose"); }
+  syncMe(); snd("chip"); say(`${R.pseudo} s'assoit à la table de la roulette russe.`, true); rrMsg("Tu es assis. La partie démarre dès qu'il y a au moins 2 joueurs.", "");
+};
+$("#rrleave").onclick = async () => {
+  let ok = false;
+  await tx(g => { ok = false; if (!g || g.state !== "wait" || !g.seats || !g.seats[R.uid]) return g; delete g.seats[R.uid]; g.pot = Math.max(0, (g.pot || 0) - FEE); if (Object.keys(g.seats).length < 2) g.startAt = null; ok = true; return g; });
+  if (ok) { K().gain(FEE); K().commit(); syncMe(); rrMsg("Tu t'es levé, mise rendue.", ""); }
+};
+$("#rrpull").onclick = () => pull(false);
+async function pull(forced) {
+  const by = R.uid; let res = null;
+  await tx(g => {
+    res = null; if (!g || g.state !== "play") return g;
+    const u = g.order[g.turn]; if (!u) return g;
+    if (!forced && u !== by) return g; if (forced && now() < g.turnAt + TURN) return g;
+    if (!forced && now() < g.turnAt) return g;
+    const bang = g.pos === g.ch;
+    if (bang) { g.seats[u].out = true; g.ch = Math.floor(Math.random() * 6); g.pos = 0; g.shots = 0; } else { g.pos++; g.shots = (g.shots || 0) + 1; }
+    g.last = { u, bang, at: now(), forced: !!forced };
+    const alive = aliveOf(g);
+    if (alive.length <= 1) { g.state = "end"; g.winner = alive[0] || ""; g.endAt = now(); }
+    else { let t = g.turn; do { t = (t + 1) % g.order.length; } while (g.seats[g.order[t]].out); g.turn = t; g.turnAt = now() + 1800; }
+    res = g.last; return g;
+  });
+  return res;
+}
+function rrSeen() {
+  if (!rr) return;
+  if (rr.last && rr.last.at !== rrLast) {
+    const fresh2 = rrLast !== 0 || now() - rr.last.at < 3000; rrLast = rr.last.at;
+    if (fresh2 && now() - rr.last.at < 4000) {
+      const who = (rr.seats[rr.last.u] || {}).p || "?";
+      if (rr.last.bang) { snd("boom"); if (rr.last.u === R.uid) rrMsg("BANG ! Ton chapeau s'envole… tu es éliminé.", "lose"); else rrMsg(`BANG ! ${who} est éliminé.`, ""); }
+      else { snd("empty"); rrMsg(`Clic… ${who} s'en sort${rr.last.forced ? " (le croupier a tiré pour lui)" : ""}.`, ""); }
+    }
+  }
+  if (rr.state === "play") { const u = rr.order[rr.turn]; const key = rr.id + ":" + rr.turnAt; if (u === R.uid && rrSeenTurn !== key) { rrSeenTurn = key; snd("ding"); } }
+  if (rr.state === "end" && rr.winner === R.uid && !rr.paid && rrPaidId !== rr.id) {
+    rrPaidId = rr.id; let ok = false, pot = 0;
+    tx(g => { ok = false; if (!g || g.state !== "end" || g.winner !== R.uid || g.paid) return g; g.paid = true; pot = g.pot || 0; ok = true; return g; }).then(() => {
+      if (!ok) return; K().gain(pot); K().commit(); syncMe(); snd("win"); rrMsg(`Dernier survivant ! Tu rafles le pot : +${pot} coins.`, "win");
+      say(`${R.pseudo} survit à la roulette russe et rafle ${pot} coins !`, true);
+    });
+  }
+}
+function rrTick() {
+  const g = rr, T = now(), seats = seatsOf(g), me = g && g.seats && g.seats[R.uid];
+  // automatismes partagés : démarrage, tour trop long, remise à zéro
+  if (g && !rrBusy) {
+    if (g.state === "wait" && g.startAt && T >= g.startAt) tx(x => { if (!x || x.state !== "wait" || !x.startAt || now() < x.startAt) return x; const ks = seatsOf(x).map(e => e[0]); if (ks.length < 2) { x.startAt = null; return x; } x.state = "play"; x.order = ks; x.ch = Math.floor(Math.random() * 6); x.pos = 0; x.shots = 0; x.turn = 0; x.turnAt = now() + 2500; x.last = null; return x; }).then(() => snd("spin"));
+    else if (g.state === "play" && T > g.turnAt + TURN) pull(true);
+    else if (g.state === "end" && T > (g.endAt || 0) + ENDW) tx(x => (x && x.state === "end" && now() > (x.endAt || 0) + ENDW ? fresh() : x));
+  }
+  // interface
+  const st = !g ? "wait" : g.state, n = seats.length;
+  let ph;
+  if (st === "wait") ph = n < 2 ? `Table libre · ${n}/${MAXS} joueurs · mise ${FEE} coins` : `Le barillet tourne dans ${Math.max(0, Math.ceil((g.startAt - T) / 1000))} s · ${n}/${MAXS} joueurs`;
+  else if (st === "play") { const u = g.order[g.turn], left = Math.max(0, Math.ceil((g.turnAt + TURN - T) / 1000)); ph = T < g.turnAt ? "…" : u === R.uid ? `À toi ! ${left} s pour appuyer` : `Au tour de ${(g.seats[u] || {}).p} · ${left} s`; }
+  else ph = g.winner ? `${(g.seats[g.winner] || {}).p} remporte ${g.pot} coins · nouvelle table dans ${Math.max(0, Math.ceil((g.endAt + ENDW - T) / 1000))} s` : "Partie terminée";
+  $("#rrphase").textContent = ph;
+  $("#rrpot").textContent = `Pot : ${(g && g.pot) || 0} coins`;
+  $("#rrsit").hidden = !(st === "wait" && !me) && !(st === "end" && !me && T > (g.endAt || 0) + ENDW);
+  $("#rrsit").disabled = n >= MAXS || K().wal.coins < FEE;
+  $("#rrleave").hidden = !(st === "wait" && me);
+  const myTurn = st === "play" && g.order[g.turn] === R.uid && T >= g.turnAt;
+  $("#rrpull").hidden = !(st === "play" && me && !me.out); $("#rrpull").disabled = !myTurn;
+  drawRR(g, seats, T);
+}
+function drawRR(g, seats, T) {
+  const cv = $("#rrcv"), x = cv.getContext("2d"), W = 640, H = 520, cx = 320, cy = 250;
+  x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, W, H);
+  // plancher du saloon
+  for (let i = 0; i < 12; i++) { x.fillStyle = i % 2 ? "#2e1b0e" : "#352010"; x.fillRect(0, i * 44, W, 44); x.fillStyle = "#00000040"; x.fillRect(0, i * 44, W, 2); for (let k = 0; k < 3; k++) { x.fillStyle = "#1a0f08"; x.fillRect(((i * 173 + k * 241) % W), i * 44 + 8, 2, 28); } }
+  // piano dans le coin et notes qui flottent
+  x.fillStyle = "#140a04"; x.fillRect(0, 0, 120, 70); x.fillStyle = "#f5f5f4"; x.fillRect(8, 52, 104, 12); x.fillStyle = "#111"; for (let k = 0; k < 13; k++) if (k % 7 !== 2 && k % 7 !== 6) x.fillRect(12 + k * 8, 52, 4, 7);
+  for (let k = 0; k < 3; k++) { const ph = ((T / 2400 + k / 3) % 1), nx = 110 + ph * 70 + Math.sin(ph * 9 + k) * 8, ny = 60 - ph * 50; x.globalAlpha = 1 - ph; x.fillStyle = "#fde68a"; x.beginPath(); x.ellipse(nx, ny, 5, 3.6, -0.4, 0, 7); x.fill(); x.fillRect(nx + 3.5, ny - 16, 1.6, 16); x.globalAlpha = 1; }
+  // zoom doux sur le joueur dont c'est le tour
+  const tU = g && g.state === "play" ? g.order[g.turn] : null;
+  if (tU && g.seats[tU]) { const a = -Math.PI / 2 + g.seats[tU].i * Math.PI * 2 / MAXS, zx = cx + Math.cos(a) * 268, zy = cy + Math.sin(a) * 186; rrZoom.x += (zx - rrZoom.x) * 0.05; rrZoom.y += (zy - rrZoom.y) * 0.05; rrZoom.k += (1.12 - rrZoom.k) * 0.05; }
+  else { rrZoom.x += (cx - rrZoom.x) * 0.05; rrZoom.y += (cy - rrZoom.y) * 0.05; rrZoom.k += (1 - rrZoom.k) * 0.05; }
+  const fx2 = cx + (rrZoom.x - cx) * 0.35, fy2 = cy + (rrZoom.y - cy) * 0.35; x.translate(cx, cy); x.scale(rrZoom.k, rrZoom.k); x.translate(-fx2, -fy2);
+  // table
+  x.fillStyle = "#00000055"; x.beginPath(); x.ellipse(cx, cy + 18, 230, 150, 0, 0, 7); x.fill();
+  x.fillStyle = "#5b3418"; x.beginPath(); x.ellipse(cx, cy, 228, 148, 0, 0, 7); x.fill();
+  x.fillStyle = "#7a4a22"; x.beginPath(); x.ellipse(cx, cy - 4, 222, 142, 0, 0, 7); x.fill();
+  const fg = x.createRadialGradient(cx, cy - 20, 20, cx, cy, 200); fg.addColorStop(0, "#1f7a4a"); fg.addColorStop(1, "#0f4a2c");
+  x.fillStyle = fg; x.beginPath(); x.ellipse(cx, cy - 6, 196, 120, 0, 0, 7); x.fill();
+  x.strokeStyle = "#e8c16a55"; x.lineWidth = 2; x.beginPath(); x.ellipse(cx, cy - 6, 176, 104, 0, 0, 7); x.stroke();
+  // lampe
+  const lg = x.createRadialGradient(cx, cy - 10, 10, cx, cy - 10, 260); lg.addColorStop(0, "#fde68a22"); lg.addColorStop(1, "#0000"); x.fillStyle = lg; x.fillRect(0, 0, W, H);
+  // jetons du pot
+  const pot = (g && g.pot) || 0;
+  for (let i = 0; i < Math.min(14, Math.ceil(pot / 20)); i++) { const a = i * 2.4, r = 18 + (i % 4) * 7; x.fillStyle = ["#dc2626", "#2563eb", "#16a34a", "#e8c16a"][i % 4]; x.beginPath(); x.ellipse(cx - 90 + Math.cos(a) * r, cy + 40 + Math.sin(a) * r * 0.5, 13, 8, 0, 0, 7); x.fill(); x.strokeStyle = "#fff8"; x.lineWidth = 1.5; x.stroke(); }
+  // sièges
+  const pos = i => { const a = -Math.PI / 2 + i * Math.PI * 2 / MAXS; return [cx + Math.cos(a) * 268, cy + Math.sin(a) * 186]; };
+  const turnU = g && g.state === "play" ? g.order[g.turn] : null;
+  for (let i = 0; i < MAXS; i++) {
+    const e = seats.find(s => s[1].i === i), [px, py] = pos(i);
+    if (!e) { x.strokeStyle = "#ffffff22"; x.setLineDash([5, 5]); x.lineWidth = 2; x.beginPath(); x.arc(px, py, 30, 0, 7); x.stroke(); x.setLineDash([]); continue; }
+    const [u, s] = e, out = s.out, col = out ? "#52525b" : SEATC[i], hit = g.last && g.last.bang && g.last.u === u && T - g.last.at < 1600;
+    if (u === turnU) { x.save(); x.shadowColor = "#fde047"; x.shadowBlur = 24; x.strokeStyle = "#fde047"; x.lineWidth = 4; x.beginPath(); x.arc(px, py, 38, 0, 7); x.stroke(); x.restore(); }
+    const shake = hit ? Math.sin(T / 20) * 4 : 0;
+    x.fillStyle = col; x.beginPath(); x.arc(px + shake, py, 30, 0, 7); x.fill();
+    // visage
+    x.fillStyle = "#1a1a1a";
+    if (out) { x.strokeStyle = "#1a1a1a"; x.lineWidth = 3; for (const ex of [-10, 10]) { x.beginPath(); x.moveTo(px + ex - 5, py - 6); x.lineTo(px + ex + 5, py + 2); x.moveTo(px + ex + 5, py - 6); x.lineTo(px + ex - 5, py + 2); x.stroke(); } }
+    else { x.beginPath(); x.arc(px - 10 + shake, py - 3, 4, 0, 7); x.arc(px + 10 + shake, py - 3, 4, 0, 7); x.fill(); x.strokeStyle = "#1a1a1a"; x.lineWidth = 2.5; x.beginPath(); if (u === turnU) x.arc(px + shake, py + 13, 6, 0, 7); else x.arc(px + shake, py + 8, 8, 0.2, Math.PI - 0.2); x.stroke(); if (u === turnU) { x.fillStyle = "#7dd3fc"; x.beginPath(); x.ellipse(px + 22, py - 10, 4, 6, 0, 0, 7); x.fill(); } }
+    // chapeau de cowboy (il s'envole quand on est éliminé)
+    let hx = px + shake, hy = py - 26, hr = 0;
+    if (out) { const k = g.last && g.last.u === u && g.last.bang ? Math.min(1, (T - g.last.at) / 900) : 1; hx += k * 34; hy -= k * 44; hr = k * 0.9; }
+    x.save(); x.translate(hx, hy); x.rotate(hr); x.fillStyle = out ? "#3f3f46" : "#8b5a2b"; x.beginPath(); x.ellipse(0, 0, 32, 7, 0, 0, 7); x.fill(); x.beginPath(); x.moveTo(-16, 0); x.quadraticCurveTo(-16, -22, -4, -20); x.lineTo(0, -16); x.lineTo(4, -20); x.quadraticCurveTo(16, -22, 16, 0); x.fill(); x.fillStyle = "#1a1a1a"; x.fillRect(-16, -6, 32, 4); x.restore();
+    x.font = "700 15px Inter"; x.textAlign = "center"; const nm = (u === R.uid ? "Toi" : s.p).slice(0, 12), tw = x.measureText(nm).width + 14;
+    x.fillStyle = "#000b"; rrR(x, px - tw / 2, py + 36, tw, 22, 8); x.fill(); x.fillStyle = out ? "#a1a1aa" : "#fff"; x.fillText(nm, px, py + 52);
+    if (out) { x.fillStyle = "#fca5a5"; x.font = "700 12px Inter"; x.fillText("éliminé", px, py + 72); }
+  }
+  // le pistolet au centre, pointé vers le joueur dont c'est le tour
+  let target = rrAng;
+  if (turnU && g.seats[turnU]) { const [px, py] = pos(g.seats[turnU].i); target = Math.atan2(py - cy, px - cx); }
+  else if (g && g.state === "wait") target = T / 1400;
+  let d = target - rrAng; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; rrAng += d * 0.12;
+  x.save(); x.translate(cx, cy - 6); x.rotate(rrAng);
+  const kick = g && g.last && T - g.last.at < 300 ? (1 - (T - g.last.at) / 300) * 0.25 : 0; x.rotate(-kick);
+  x.fillStyle = "#00000055"; x.fillRect(-36, 6, 110, 14);
+  x.fillStyle = "#6b4423"; x.beginPath(); x.moveTo(-40, -6); x.lineTo(-14, -6); x.lineTo(-8, 18); x.quadraticCurveTo(-30, 26, -48, 14); x.closePath(); x.fill();
+  x.fillStyle = "#9ca3af"; rrR(x, -16, -12, 34, 20, 6); x.fill(); x.fillStyle = "#6b7280"; x.fillRect(16, -9, 66, 10); x.fillStyle = "#d1d5db"; x.fillRect(16, -9, 66, 3); x.fillRect(78, -13, 4, 5);
+  x.fillStyle = "#4b5563"; x.beginPath(); x.arc(1, -2, 9, 0, 7); x.fill();
+  x.restore();
+  // effets : BANG ou clic
+  if (g && g.last && T - g.last.at < 1700) {
+    const k = (T - g.last.at) / 1700, mx = cx + Math.cos(rrAng) * 96, my = cy - 6 + Math.sin(rrAng) * 96;
+    if (g.last.bang) {
+      for (let i = 0; i < 6; i++) { const a = i * 1.1 + 0.4, r = 16 + k * 60; x.fillStyle = `rgba(200,200,210,${0.55 * (1 - k)})`; x.beginPath(); x.arc(mx + Math.cos(a) * r * 0.6, my + Math.sin(a) * r * 0.4 - k * 30, 14 + k * 22, 0, 7); x.fill(); }
+      if (k < 0.55) {
+        const s = 1 + Math.sin(k * 20) * 0.06; x.save(); x.translate(cx, cy - 40); x.scale(s, s); x.fillStyle = "#fde047"; x.strokeStyle = "#b45309"; x.lineWidth = 5; x.beginPath();
+        for (let i = 0; i < 24; i++) { const a = i * Math.PI / 12, r = i % 2 ? 58 : 100; x.lineTo(Math.cos(a) * r * 1.35, Math.sin(a) * r * 0.8); } x.closePath(); x.fill(); x.stroke();
+        x.fillStyle = "#dc2626"; x.font = "900 54px 'Rye', Georgia, serif"; x.textAlign = "center"; x.fillText("BANG !", 0, 18); x.restore();
+      }
+    } else if (k < 0.7) { const sl = Math.min(1, k * 4); x.save(); x.translate(mx, my - 30); x.scale(0.6 + sl * 0.5, 0.6 + sl * 0.5); x.fillStyle = "#fff"; x.strokeStyle = "#1a1a1a"; x.lineWidth = 3; rrR(x, -40, -22, 80, 38, 14); x.fill(); x.stroke(); x.fillStyle = "#1a1a1a"; x.font = "800 22px Inter"; x.textAlign = "center"; x.fillText("clic", 0, 5); x.restore(); }
+  }
+  // barillet : coups tirés
+  const bx = 560, by = 450, shots = g && g.state === "play" ? g.shots || 0 : 0;
+  x.fillStyle = "#1f2937"; x.beginPath(); x.arc(bx, by, 46, 0, 7); x.fill(); x.strokeStyle = "#9ca3af"; x.lineWidth = 3; x.stroke();
+  for (let i = 0; i < 6; i++) { const a = -Math.PI / 2 + i * Math.PI / 3, ox = bx + Math.cos(a) * 27, oy = by + Math.sin(a) * 27; x.fillStyle = i < shots ? "#111827" : "#b45309"; x.beginPath(); x.arc(ox, oy, 10, 0, 7); x.fill(); x.strokeStyle = i === shots && g && g.state === "play" ? "#fde047" : "#4b5563"; x.lineWidth = 2.5; x.stroke(); }
+  x.fillStyle = "#e5e7eb"; x.font = "700 13px Inter"; x.textAlign = "center"; x.fillText(g && g.state === "play" ? `1 chance sur ${6 - shots}` : "6 chambres, 1 bouchon", bx, by + 66);
+  // lampe qui se balance au-dessus de la table : cône de lumière et poussière
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  const sw = Math.sin(T / 1300) * 60, lx = cx + sw, ly = cy - 10;
+  const lg2 = x.createRadialGradient(lx, ly, 10, lx, ly, 240); lg2.addColorStop(0, "rgba(253,230,138,.22)"); lg2.addColorStop(0.6, "rgba(253,230,138,.06)"); lg2.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = lg2; x.fillRect(0, 0, W, H);
+  const vg2 = x.createRadialGradient(lx, ly, 180, cx, cy, 420); vg2.addColorStop(0, "rgba(0,0,0,0)"); vg2.addColorStop(1, "rgba(0,0,0,.55)"); x.fillStyle = vg2; x.fillRect(0, 0, W, H);
+  for (let i = 0; i < 40; i++) { const a = i * 2.39996, r = ((i * 37) % 200) + Math.sin(T / 1700 + i) * 12, dx = lx + Math.cos(a + T / 9000) * r, dy = ly + Math.sin(a + T / 9000) * r * 0.7; x.fillStyle = `rgba(255,240,200,${0.15 + 0.35 * (1 - r / 220)})`; x.fillRect(dx, dy, 1.6, 1.6); }
+  // fil et abat-jour vus du dessus
+  x.strokeStyle = "#0008"; x.lineWidth = 2; x.beginPath(); x.moveTo(cx, -10); x.lineTo(lx, ly - 30); x.stroke();
+  x.fillStyle = "#14532d"; x.beginPath(); x.arc(lx, ly - 30, 16, 0, 7); x.fill(); x.fillStyle = "#fef3c7"; x.beginPath(); x.arc(lx, ly - 30, 7, 0, 7); x.fill();
+  // battement de cœur quand c'est ton tour
+  if (g && g.state === "play" && g.order[g.turn] === R.uid && T >= g.turnAt) {
+    const left = Math.max(0, (g.turnAt + TURN - T) / TURN), bpm = 90 + (1 - left) * 90 + (g.shots || 0) * 12, per = 60000 / bpm, ph = (T % per) / per;
+    x.save(); x.strokeStyle = "#ef4444"; x.shadowColor = "#ef4444"; x.shadowBlur = 10; x.lineWidth = 2.5; x.beginPath();
+    for (let i = 0; i <= 120; i++) { const t = ((i / 120) + T / per * 0.5) % 1, yv = t > 0.4 && t < 0.44 ? -18 : t > 0.44 && t < 0.48 ? 22 : t > 0.48 && t < 0.52 ? -8 : 0; const px = 20 + i * 1.6, py = 488 + yv; i ? x.lineTo(px, py) : x.moveTo(px, py); }
+    x.stroke(); x.restore();
+    x.fillStyle = "#fca5a5"; x.font = "800 15px Inter"; x.textAlign = "left"; x.fillText(`♥ ${Math.round(bpm)}`, 220, 494);
+    if (ph < 0.05 && rrBeat !== Math.floor(T / per)) { rrBeat = Math.floor(T / per); snd("tick"); }
+  }
+}
+let rrZoom = { x: 320, y: 250, k: 1 }, rrBeat = 0;
+function rrR(x, a, b, w, h, r) { x.beginPath(); x.moveTo(a + r, b); x.arcTo(a + w, b, a + w, b + h, r); x.arcTo(a + w, b + h, a, b + h, r); x.arcTo(a, b + h, a, b, r); x.arcTo(a, b, a + w, b, r); x.closePath(); }
+
+function loop() { if (R) { try { rouletteTick(); bjTick(); if (sub === "rr") rrTick(); if ((++frameN) % 15 === 0) renderBets(); } catch (e) { console.error(e); } } requestAnimationFrame(loop); }
+window.SALOON = { open, say, get rr() { return rr; }, pull: () => pull(false) };
 }

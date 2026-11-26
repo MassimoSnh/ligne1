@@ -76,6 +76,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .saloon{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
 @media(min-width:980px){.saloon{grid-template-columns:minmax(0,1fr) 320px}}
 .subtabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.rrcv{display:block;width:100%;max-width:640px;height:auto;margin:6px auto;background:radial-gradient(ellipse at center,#3a2414 0%,#1a0f08 70%);border-radius:18px;border:2px solid #ffffff14}
+.rrpull{background:#dc2626;color:#fff}.rrpull:disabled{opacity:.45;cursor:not-allowed}
 .phase{display:flex;align-items:center;gap:12px;margin-bottom:12px;font-size:17px}.phase .bar{flex:1;height:10px;background:#0005;border-radius:6px;overflow:hidden}.phase .bar i{display:block;height:100%;background:var(--gold);width:0}
 .side{background:#0005;border:2px solid #ffffff20;border-radius:20px;padding:16px;display:flex;flex-direction:column}
 .plist{display:flex;flex-direction:column;gap:4px}.plist div{display:flex;gap:8px;align-items:center;padding:6px 8px;background:#ffffff0d;border-radius:8px}.plist b{flex:1}
@@ -88,6 +90,17 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#000;color:#fff;padding:12px 18px;border-radius:10px;z-index:80;max-width:90vw}
 @media(prefers-reduced-motion:reduce){.card{animation:none}.reel.spin svg{animation:none}}
 </style>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/neon.css">
+<link rel="manifest" href="../manifest.webmanifest">
+<meta name="theme-color" content="#0a0716">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Arcade">
+<link rel="apple-touch-icon" href="../icons/apple-180.png">
+<link rel="icon" href="../icons/icon-192.png">
+<script src="../shared/app.js"></script>
 </head>
 <body>
 <div class="band">
@@ -132,13 +145,20 @@ button:disabled{opacity:.45;cursor:not-allowed}
   <section id="g-saloon" hidden>
     <div class="saloon">
       <div class="table">
-        <div class="subtabs"><button class="tab" data-s="r" aria-pressed="true">Roulette du saloon</button><button class="tab" data-s="b" aria-pressed="false">Blackjack du saloon</button></div>
+        <div class="subtabs"><button class="tab" data-s="r" aria-pressed="true">Roulette du saloon</button><button class="tab" data-s="b" aria-pressed="false">Blackjack du saloon</button><button class="tab" data-s="rr" aria-pressed="false">Roulette russe</button></div>
         <div id="s-r">
           <div class="phase"><b id="sphase">Connexion…</b><span class="bar"><i id="sbar"></i></span></div>
           <div class="rl"><div class="wheelbox"><div class="ptr"></div><canvas id="swheel" width="600" height="600" aria-label="Roue du saloon"></canvas></div>
           <div><div class="board" id="sboard"></div><div class="chips" id="schips"></div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="ghost" id="sclear">Retirer mes mises</button><span id="stotal" class="small"></span></div>
           <div class="msg" id="smsg" aria-live="polite"></div><div id="sbets" class="small"></div></div></div>
+        </div>
+        <div id="s-rr" hidden>
+          <div class="phase"><b id="rrphase">Connexion…</b><b id="rrpot" style="color:var(--gold)"></b></div>
+          <p class="small">Jusqu'à 6 joueurs autour de la table, 20 coins pour s'asseoir, tout va dans le pot. Un vieux pistolet à bouchon, 6 chambres, un seul bouchon : chacun appuie à son tour. Le bouchon fait sauter ton chapeau et tu es éliminé. Le dernier assis rafle le pot. 15 s pour appuyer, sinon le croupier le fait pour toi.</p>
+          <canvas id="rrcv" width="640" height="520" class="rrcv" aria-label="Table de la roulette russe"></canvas>
+          <div class="msg" id="rrmsg" aria-live="polite"></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center"><button class="btn" id="rrsit">S'asseoir (20 coins)</button><button class="ghost" id="rrleave" hidden>Se lever</button><button class="btn rrpull" id="rrpull" hidden disabled>Appuyer sur la détente</button></div>
         </div>
         <div id="s-b" hidden>
           <div class="phase"><b id="bphase">Connexion…</b><span class="bar"><i id="bbar"></i></span></div>

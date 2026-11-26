@@ -16,7 +16,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;overflow:hidden;background:#000;color:#fff;font-family:Inter,system-ui,sans-serif;user-select:none;-webkit-user-select:none}
 #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
-.hud{position:fixed;pointer-events:none;font-weight:700;text-shadow:0 2px 6px #000a}
+.hud{position:fixed;z-index:2;pointer-events:none;font-weight:700;text-shadow:0 2px 6px #000a}
 .tl{left:14px;top:max(12px,env(safe-area-inset-top))}.tr{right:14px;top:max(12px,env(safe-area-inset-top));text-align:right}
 .bl{left:14px;bottom:max(14px,env(safe-area-inset-bottom))}.br{right:14px;bottom:max(14px,env(safe-area-inset-bottom));text-align:right}
 .big{font:800 34px "Inter Tight",sans-serif}
@@ -42,13 +42,33 @@ html,body{margin:0;height:100%;overflow:hidden;background:#000;color:#fff;font-f
   #fire{right:28px;bottom:40px;width:96px;height:96px;background:#dc2626bb}
   #reload{right:140px;bottom:30px;width:64px;height:64px;background:#2563ebbb}
   #jump{right:40px;bottom:156px;width:64px;height:64px;background:#16a34abb}
+  #swap{right:150px;bottom:104px;width:56px;height:56px;background:#7c3aedbb;font-size:11px}
+  #aim{right:118px;bottom:172px;width:56px;height:56px;background:#0f766ebb;font-size:11px}#aim.on{background:#facc15;color:#111}
+  body #wbar{display:none}
+  #crouch{right:184px;bottom:172px;width:56px;height:56px;background:#334155cc;font-size:10px}#crouch.on{background:#facc15;color:#111}
   .bl{bottom:180px}.keys{display:none}
   .br{top:max(12px,env(safe-area-inset-top));bottom:auto;right:50%;transform:translateX(50%);text-align:center}
 }
+#wbar{left:50%;bottom:max(12px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;align-items:flex-start;gap:6px;font-size:13px;white-space:nowrap}
+#wbar span{padding:4px 9px;border-radius:8px;background:#0007;color:#cbd5e1}#wbar span.on{background:#22c55e;color:#04210f}
+#wname{font-size:14px;color:#e2e8f0}
+#scope{position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 50%,transparent 0,transparent min(34vh,34vw),#000 calc(min(34vh,34vw) + 2px))}
+#scope i{position:absolute;left:50%;top:50%;width:min(68vh,68vw);height:min(68vh,68vw);transform:translate(-50%,-50%);background:linear-gradient(#000,#000) center/2px 100% no-repeat,linear-gradient(#000,#000) center/100% 2px no-repeat;border-radius:50%;box-shadow:0 0 0 3px #000}
 #pill{position:fixed;right:14px;top:70px;z-index:4}
 .pillbtn{display:inline-flex;align-items:center;min-height:40px;padding:6px 12px;border-radius:10px;background:#fde68a;color:#111;text-decoration:none;font-weight:700}.pillbtn.me{background:#fff;font-weight:500}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#000;color:#fff;padding:12px 18px;border-radius:10px;z-index:80;max-width:90vw}
 </style>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/neon.css">
+<link rel="manifest" href="../manifest.webmanifest">
+<meta name="theme-color" content="#0a0716">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Arcade">
+<link rel="apple-touch-icon" href="../icons/apple-180.png">
+<link rel="icon" href="../icons/icon-192.png">
+<script src="../shared/app.js"></script>
 </head>
 <body>
 <canvas id="c"></canvas>
@@ -56,13 +76,15 @@ html,body{margin:0;height:100%;overflow:hidden;background:#000;color:#fff;font-f
 <div id="hurt"></div>
 <div class="hud tl"><div class="big" id="score">0</div><div id="wave">Vague 1</div><div id="left"></div></div>
 <div class="hud bl"><div>Santé</div><div class="hp"><i id="hp" style="width:100%"></i></div></div>
-<div class="hud br"><div class="big" id="ammo">30 / 30</div><div id="reloadTxt"></div></div>
+<div class="hud br"><div class="big" id="ammo">30 / 30</div><div id="wname"></div><div id="reloadTxt"></div></div>
+<div class="hud" id="wbar"></div>
+<div id="scope" hidden><i></i></div>
 <div class="center" id="banner"></div>
-<div class="touch"><div id="stick"><div id="knob"></div></div><button class="tb" id="jump">SAUT</button><button class="tb" id="reload">RECH.</button><button class="tb" id="fire">TIR</button></div>
+<div class="touch"><div id="stick"><div id="knob"></div></div><button class="tb" id="jump">SAUT</button><button class="tb" id="reload">RECH.</button><button class="tb" id="fire">TIR</button><button class="tb" id="swap">ARME</button><button class="tb" id="aim">VISER</button><button class="tb" id="crouch">ACCROUPI</button></div>
 <div class="panel" id="panel">
   <h1>Bloc Assaut</h1>
   <p>Des robots cubiques envahissent le lotissement. Tiens le plus de vagues possible.</p>
-  <p class="keys">Souris : viser · Clic : tirer · ZQSD ou WASD : bouger · Espace : sauter · R : recharger · Échap : pause</p>
+  <p class="keys">Souris : viser · Clic : tirer · ZQSD ou WASD : bouger · Espace : sauter · R : recharger · Clic droit : viser · C : s'accroupir · F : coup de couteau · 1 à 7 ou molette : changer d'arme · Échap : pause</p>
   <p id="best"></p>
   <button class="btn" id="go">Solo : vagues de robots</button><br><button class="btn" id="mpgo" style="background:#3b82f6;color:#fff">Multijoueur entre collègues</button><br><a class="ghost" href="../">← Arcade</a>
 </div>

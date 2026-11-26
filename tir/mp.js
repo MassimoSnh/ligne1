@@ -4,13 +4,13 @@
 const $ = s => document.querySelector(s), C = window.TIRCORE, T = C.T;
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const MODES = { ffa: { name: "Match à mort", desc: "Chacun pour soi. Le premier à 15 éliminations gagne.", limit: 15, time: 480 }, dom: { name: "Domination", desc: "Deux équipes, trois drapeaux A, B, C. Reste près d'un drapeau pour le capturer. Chaque drapeau tenu rapporte 1 point par seconde. Premier à 150.", limit: 150, time: 600 } };
-const FLAGS = { A: { x: -22, z: 0 }, B: { x: 3, z: -0.4 }, C: { x: 25, z: -1 } };
+const FLAGS = { A: { x: -27, z: -13 }, B: { x: -3.5, z: 13.5 }, C: { x: 27.5, z: -8 } };
 const TEAMC = { A: 0x3b82f6, B: 0xef4444 }, TEAMN = { A: "Bleus", B: "Rouges" }, TEAMH = { A: "#3b82f6", B: "#ef4444" };
 const PAL = [0xf59e0b, 0x22c55e, 0xa855f7, 0x06b6d4, 0xec4899, 0x84cc16, 0xf97316, 0x14b8a6];
 const SP = [[-28, -14], [-26, 14], [-14, -1], [-8, 18], [-6, -21], [2, 12], [6, -14], [14, -2], [18, 21], [26, -18], [29, 6], [30, -6], [-31, -6], [-18, 21], [10, 22], [22, -10], [-24, -23], [0, 23]].filter(([x, z]) => !C.hitsAt(x, 0, z, 0.5, 0));
 let R = null, code = null, meta = null, players = {}, live = {}, scores = {}, dom = null, offset = 0, joinedAt = 0, unsub = [], liveT = 0, hostT = 0, hostAcc = 0, inGame = false, lastAttacker = null, ended = false, feed = [], flagMeshes = {};
 const me = { alive: true, hp: 100, kills: 0, deaths: 0, respawnT: 0, prot: 0, team: null, seq: 0 };
-const avatars = {};
+const avatars = {}, WNAME = Object.fromEntries(C.WEAPONS.map(w => [w.id, w.short]));
 const now = () => Date.now() + offset;
 const isHost = () => meta && R && meta.host === R.uid;
 const colorOf = uid => { if (meta && meta.mode === "dom") { const p = players[uid]; return p && p.team ? TEAMC[p.team] : 0x9ca3af; } let h = 0; for (const c of uid) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PAL[h % PAL.length]; };
@@ -66,7 +66,9 @@ async function join(c) {
   if (!m) return err("Salon introuvable. Vérifie le code.");
   const ps = (await R.d.get(R.d.ref(R.rdb, `rooms/${c}/players`))).val() || {};
   if (Object.keys(ps).length >= 8 && !ps[R.uid]) return err("Salon complet (8 joueurs maximum).");
+  if (m.game && m.game !== "tir") { const g = (window.ARCADE_GAMES || []).find(x => x.id === m.game); return err(`Ce code est un salon de ${g ? g.name : "un autre jeu"}.`); }
   code = c; meta = m; joinedAt = now(); ended = m.state === "end";
+  if (window.ONLINE) window.ONLINE.setDetail(`salon ${c}`);
   const cnt = { A: 0, B: 0 }; Object.values(ps).forEach(x => { if (x.team) cnt[x.team]++; });
   me.team = (ps[R.uid] && ps[R.uid].team) || (cnt.A <= cnt.B ? "A" : "B");
   await R.d.set(p(`players/${R.uid}`), { pseudo: R.pseudo, team: me.team, joined: R.d.serverTimestamp() });
@@ -126,37 +128,51 @@ function respawn() {
   Object.assign(C.P, { x, y: 0, z, vy: 0, yaw: Math.atan2(x, z), pitch: 0, hp: 100, ground: true });
   me.alive = true; me.hp = 100; me.prot = 1.5; C.refill(); writeLive();
 }
-function die(killer, head) {
+function die(killer, head, w) {
+  window.SFX && window.SFX.play("die");
   me.alive = false; me.hp = 0; C.P.hp = 0; me.deaths++; me.respawnT = 3.2;
   R.d.update(p(`score/${R.uid}`), { deaths: me.deaths });
-  R.d.push(p("ev"), { type: "kill", killer: killer || "", victim: R.uid, head: !!head, t: R.d.serverTimestamp() });
+  R.d.push(p("ev"), { type: "kill", killer: killer || "", victim: R.uid, head: !!head, w: w || "", t: R.d.serverTimestamp() });
   writeLive();
 }
 function writeLive() {
   if (!code) return; const P = C.P;
-  R.d.set(p(`live/${R.uid}`), { x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +P.yaw.toFixed(3), pitch: +P.pitch.toFixed(3), alive: me.alive, team: me.team || "", s: me.seq, hp: Math.round(me.hp) });
+  R.d.set(p(`live/${R.uid}`), { x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +P.yaw.toFixed(3), pitch: +P.pitch.toFixed(3), alive: me.alive, team: me.team || "", s: me.seq, hp: Math.round(me.hp), w: C.weapon, c: C.crouch ? 1 : 0 });
 }
 function onEvent(e) {
   if (!e || !code || (e.t && e.t < joinedAt - 1500)) return;
   if (e.type === "hit" && e.to === R.uid && me.alive && inGame) {
     if (me.prot > 0) return;
     me.hp -= e.dmg; C.P.hp = Math.max(0, me.hp); C.setHurt(0.5); lastAttacker = e.from;
-    if (me.hp <= 0) die(e.from, e.head);
+    if (me.hp <= 0) die(e.from, e.head, e.w);
   }
   if (e.type === "kill") {
     const kn = (players[e.killer] || scores[e.killer] || {}).pseudo || "?", vn = (players[e.victim] || scores[e.victim] || {}).pseudo || "?";
-    feed.unshift({ html: `<b style="color:#${colorOf(e.killer).toString(16).padStart(6, "0")}">${esc(kn)}</b> ${e.head ? "⌖" : "›"} <b style="color:#${colorOf(e.victim).toString(16).padStart(6, "0")}">${esc(vn)}</b>`, t: 5 });
+    feed.unshift({ html: `<b style="color:#${colorOf(e.killer).toString(16).padStart(6, "0")}">${esc(kn)}</b> <span style="color:#cbd5e1;font-weight:500;font-size:12px">[${esc(WNAME[e.w] || "›")}${e.head ? " ⌖" : ""}]</span> <b style="color:#${colorOf(e.victim).toString(16).padStart(6, "0")}">${esc(vn)}</b>`, t: 5 });
     if (e.killer === R.uid && e.victim !== R.uid) { me.kills++; R.d.update(p(`score/${R.uid}`), { kills: me.kills }); C.floatTxt(e.head ? "+1 · tir à la tête !" : `+1 · ${vn} éliminé`); }
     if (e.victim === R.uid) C.floatTxt(`Éliminé par ${kn}`);
   }
+  if (e.type === "fx" && e.from !== R.uid) C.explode(e.x, e.y, e.z);
   if (e.type === "flag") C.floatTxt(`Les ${TEAMN[e.team]} capturent ${e.flag} !`);
 }
-function hit(uid, head, point) {
+function hit(uid, head, point, dmg, w) {
   if (!me.alive || !inGame) return false;
   const l = live[uid]; if (!l || !l.alive) return false;
   if (meta.mode === "dom" && l.team === me.team) return false;
-  R.d.push(p("ev"), { type: "hit", from: R.uid, to: uid, dmg: head ? 50 : 25, head: !!head, t: R.d.serverTimestamp() });
+  R.d.push(p("ev"), { type: "hit", from: R.uid, to: uid, dmg: Math.max(1, Math.min(200, Math.round(dmg || 22))), head: !!head, w: w || "", t: R.d.serverTimestamp() });
   return true;
+}
+// explosion du lance-briques : touche tous les adversaires dans le rayon
+function blast(at, radius, dmg, w) {
+  if (!inGame) return false;
+  R.d.push(p("ev"), { type: "fx", from: R.uid, x: +at.x.toFixed(2), y: +at.y.toFixed(2), z: +at.z.toFixed(2), t: R.d.serverTimestamp() });
+  let n = 0;
+  for (const [uid, l] of Object.entries(live)) {
+    if (uid === R.uid || !l.alive || (meta.mode === "dom" && l.team === me.team)) continue;
+    const d = Math.hypot(l.x - at.x, l.y + 1 - at.y, l.z - at.z);
+    if (d < radius && hit(uid, false, at, dmg * (1 - d / radius * 0.6), w)) n++;
+  }
+  return n > 0;
 }
 
 /* ---------- avatars des autres joueurs ---------- */
@@ -189,13 +205,15 @@ function updateAvatars(dt) {
     const sp = Math.hypot(a.g.position.x - ox, a.g.position.z - oz) / Math.max(dt, 1e-3); a.t += dt * Math.min(sp, 6) * 2;
     a.legL.rotation.x = Math.sin(a.t) * 0.6 * Math.min(1, sp / 3); a.legR.rotation.x = -a.legL.rotation.x;
     a.g.visible = !!l.alive;
+    const cs = l.c ? 0.68 : 1; a.g.scale.y += (cs - a.g.scale.y) * k;
     if (l.s > a.s) { a.s = l.s; if (l.alive) tracerFrom(a, l); }
   }
 }
 function tracerFrom(a, l) {
   const st = new T.Vector3(0.3, 1.3, 0.8).applyMatrix4(a.g.matrixWorld), dir = new T.Vector3(-Math.sin(l.yaw) * Math.cos(l.pitch), Math.sin(l.pitch), -Math.cos(l.yaw) * Math.cos(l.pitch));
   const en = st.clone().addScaledVector(dir, 40);
-  const tr = new T.Line(new T.BufferGeometry().setFromPoints([st, en]), new T.LineBasicMaterial({ color: 0xffe08a })); tr.userData.l = 0.05; C.scene.add(tr); C.tracers.push(tr);
+  if (l.w === "rpg" || l.w === "knife") return;
+  const tr = new T.Line(new T.BufferGeometry().setFromPoints([st, en]), new T.LineBasicMaterial({ color: l.w === "sniper" ? 0xbfffd0 : 0xffe08a })); tr.userData.l = 0.05; C.scene.add(tr); C.tracers.push(tr);
 }
 
 /* ---------- drapeaux (domination) ---------- */
@@ -314,6 +332,12 @@ function results() {
   $("#quit").onclick = leave;
 }
 
-window.MP = { update: (dt) => update(dt), targets: () => Object.values(avatars).filter(a => a.g.visible).flatMap(a => a.g.children.filter(c => c.isMesh)), hit, onShot: () => { me.seq++; }, alive: () => me.alive && inGame, leave, get code() { return code; }, get me() { return me; } };
+// ouverture directe depuis l'accueil : #multi ou #salon=CODE
+(function autoOpen() {
+  const h = location.hash, mm = /^#salon=([A-Za-z0-9]{5})$/.exec(h); if (!mm && h !== "#multi") return;
+  history.replaceState(null, "", location.pathname + location.search);
+  const t = setInterval(async () => { if (!window.ONLINE || !window.TIRCORE) return; clearInterval(t); if (!(await ensure())) return; if (mm) join(mm[1].toUpperCase()); else menu(); }, 200);
+})();
+window.MP = { blast, update: (dt) => update(dt), targets: () => Object.values(avatars).filter(a => a.g.visible).flatMap(a => a.g.children.filter(c => c.isMesh)), hit, onShot: () => { me.seq++; }, alive: () => me.alive && inGame, leave, get code() { return code; }, get me() { return me; } };
 ui();
 }
